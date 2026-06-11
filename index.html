@@ -1480,42 +1480,85 @@ function submitBooking() {
   if (cartons <= 0) { showAlert('bookAlert', 'عدد الكراتين يجب أن يكون أكبر من صفر', 'error'); return; }
   if (!date) { showAlert('bookAlert', 'يرجى اختيار التاريخ', 'error'); return; }
   if (!selectedSlot) { showAlert('bookAlert', 'يرجى اختيار الوقت', 'error'); return; }
-  
-  let availableCapacity = getSlotAvailableCapacity(whId, date, selectedSlot);
-  let requestedUnits = (truckCount * truckUnitWeight(truckType));
-  if (requestedUnits > availableCapacity) {
-    showAlert('bookAlert', `❌ لا يمكن حجز هذا العدد! السعة المتبقية في هذا الموعد هي ${fmtCap(Math.max(availableCapacity,0))} وحدة فقط.`, 'error');
-    return;
+
+  // ===== Spillover booking across next slots if needed =====
+  const unitWeight = truckUnitWeight(truckType);
+  if (!unitWeight || unitWeight <= 0) { showAlert('bookAlert', 'نوع العربية غير صحيح', 'error'); return; }
+
+  // Basic guards
+  if (isPastSlot(date, selectedSlot)) { showAlert('bookAlert', 'هذا الموعد انتهى وقته', 'error'); return; }
+
+  // Build slot sequence starting from selectedSlot
+  const startIdx = SLOTS_PER_DAY.indexOf(selectedSlot);
+  if (startIdx < 0) { showAlert('bookAlert', 'الوقت المختار غير صحيح', 'error'); return; }
+
+  let remainingTrucks = truckCount;
+  let createdAt = new Date().toISOString();
+  let groupId = genId();
+  let createdIds = [];
+
+  for (let i = startIdx; i < SLOTS_PER_DAY.length && remainingTrucks > 0; i++) {
+    const slotTime = SLOTS_PER_DAY[i];
+    // Skip blocked/past
+    if (isPastSlot(date, slotTime)) continue;
+    if (isBlocked(whId, date, slotTime)) continue;
+
+    const availableUnits = getSlotAvailableCapacity(whId, date, slotTime);
+    if (availableUnits <= 0) continue;
+
+    const maxTrucksFit = Math.floor((availableUnits + 1e-9) / unitWeight);
+    if (maxTrucksFit <= 0) continue;
+
+    const allocate = Math.min(remainingTrucks, maxTrucksFit);
+    if (allocate <= 0) continue;
+
+    const bookingId = (remainingTrucks === truckCount && allocate === truckCount)
+      ? groupId
+      : `${groupId}-${createdIds.length + 1}`;
+
+    let booking = {
+      id: bookingId,
+      groupId,
+      warehouse: whId,
+      supplier,
+      orderNum: orderNum || '',
+      goodsType,
+      plate: plate || '',
+      driver: driver || '',
+      truckType,
+      truckCount: allocate,
+      cartons,
+      palletLoading,
+      qty,
+      notes,
+      date,
+      time: slotTime,
+      status: 'approved',
+      createdAt,
+    };
+
+    warehouseData[whId].bookings.push(booking);
+    createdIds.push(bookingId);
+    remainingTrucks -= allocate;
+
+    // Sync to Sheets
+    upsertBookingToApi(whId, booking);
   }
-  
-  if (isBlocked(whId, date, selectedSlot)) {
-    showAlert('bookAlert', 'هذا الموعد مغلق من قبل إدارة المخزن', 'error');
+
+  if (remainingTrucks > 0) {
+    showAlert('bookAlert', `❌ السعة غير كافية لحجز ${truckCount} عربة. المتبقي بدون حجز: ${remainingTrucks} عربة.`, 'error');
+    // NOTE: For simplicity we don't rollback inserted rows. User can cancel them.
+    saveWarehouseData(whId);
     renderSupplierSlots();
+    renderMyBookings();
     return;
   }
 
-  let booking = { 
-    id: genId(), warehouse: whId, supplier, orderNum: orderNum || '', goodsType, plate: plate || '', driver: driver || '', 
-    truckType, truckCount, cartons, palletLoading, 
-    qty, notes, date, time: selectedSlot, 
-    status: 'approved',
-    createdAt: new Date().toISOString() 
-  };
-  warehouseData[whId].bookings.push(booking);
   saveWarehouseData(whId);
-  // Sync to Sheets
-  upsertBookingToApi(whId, booking);
-  // Update UI immediately (so other supplier sees capacity on next sync)
   renderSupplierSlots();
   renderMyBookings();
 
-  let remaining = availableCapacity - truckCount;
-  let message = `✅ تم تأكيد حجزك بنجاح! رقم حجزك: ${booking.id}`;
-  if (remaining === 0) {
-    message += `\n⚠️ تنبيه: هذا الموعد اكتملت سعته بالكامل (${SLOT_CAPACITY}/${SLOT_CAPACITY} عربية).`;
-  } else if (remaining === 1) {
-    message += `\n⚠️ تنبيه: تبقى سعة واحدة فقط في هذا الموعد.`;
-  }
+  let message = `✅ تم تأكيد الحجز بنجاح! أرقام الحجز: ${createdIds.join(', ')}`;
   showAlert('bookAlert', message, 'success');
   
   document.getElementById('supOrder').value = '';
@@ -1533,7 +1576,7 @@ function submitBooking() {
   renderSupplierSlots();
   renderMyBookings();
   document.getElementById('trackerWrap').style.display = 'block';
-  document.getElementById('trackId').value = booking.id;
+  document.getElementById('trackId').value = createdIds[0] || '';
   trackBooking();
 }
 
