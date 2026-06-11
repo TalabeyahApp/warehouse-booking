@@ -1097,7 +1097,20 @@ function getSlotAvailableCapacity(whId, date, time) {
   return SLOT_CAPACITY - getSlotBookedCount(whId, date, time);
 }
 
+// Close slots that have already passed in real time (based on user's local time)
+function isPastSlot(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return false;
+  // dateStr: YYYY-MM-DD, timeStr: HH:MM
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  if (!/^\d{2}:\d{2}$/.test(timeStr)) return false;
+  const [y,m,d] = dateStr.split('-').map(n => parseInt(n,10));
+  const [hh,mm] = timeStr.split(':').map(n => parseInt(n,10));
+  const slot = new Date(y, (m-1), d, hh, mm, 0, 0);
+  return Date.now() > slot.getTime();
+}
+
 function slotStatus(whId, date, time) {
+  if (isPastSlot(date, time)) return 'past';
   if (isBlocked(whId, date, time)) return 'blocked';
   let available = getSlotAvailableCapacity(whId, date, time);
   if (available <= 0) return 'full';
@@ -1287,7 +1300,7 @@ function renderSupplierSlots() {
     let st = slotStatus(whId, date, time);
     let bookedCount = getSlotBookedCount(whId, date, time);
     let available = SLOT_CAPACITY - bookedCount;
-    let taken = (st === 'blocked' || st === 'full');
+    let taken = (st === 'blocked' || st === 'full' || st === 'past');
     let cap = '';
     let extraClass = '';
     
@@ -1296,6 +1309,10 @@ function renderSupplierSlots() {
       extraClass = 'full';
     } else if (st === 'blocked') {
       cap = '🔒 مغلق';
+      extraClass = 'taken';
+      taken = true;
+    } else if (st === 'past') {
+      cap = '⏱ انتهى الوقت';
       extraClass = 'taken';
       taken = true;
     } else if (st === 'warning') {
