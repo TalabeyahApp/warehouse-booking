@@ -1082,8 +1082,15 @@ function isBlocked(whId, date, time) {
 
 function getSlotBookedCount(whId, date, time) {
   let ds = warehouseData[whId];
-  let slotBookings = (ds?.bookings || []).filter(b => b.date === date && b.time === time && b.status !== 'rejected');
-  return slotBookings.reduce((sum, b) => sum + (b.truckCount || 1), 0);
+  // Count only bookings that should consume capacity
+  // (ignore rejected/cancelled; completed still consumes the slot capacity historically)
+  let slotBookings = (ds?.bookings || []).filter(b =>
+    b.date === date &&
+    b.time === time &&
+    b.status !== 'rejected' &&
+    b.status !== 'cancelled'
+  );
+  return slotBookings.reduce((sum, b) => sum + (parseInt(b.truckCount) || 1), 0);
 }
 
 function getSlotAvailableCapacity(whId, date, time) {
