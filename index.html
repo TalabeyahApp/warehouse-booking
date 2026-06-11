@@ -1204,22 +1204,21 @@ function checkCapacity() {
   let available = getSlotAvailableCapacity(whId, date, time);
   
   if (requestedUnits > available) {
-    errorMsg.classList.add('show');
-    warningMsg.classList.remove('show');
-    bookBtn.disabled = true;
-    bookBtn.textContent = `⛔ السعة غير كافية (متاح: ${fmtCap(Math.max(available,0))} وحدة)`;
+    // Do NOT block booking; spillover logic in submitBooking will distribute across next slots.
+    errorMsg.classList.remove('show');
+    warningMsg.classList.add('show');
+    bookBtn.disabled = false;
+    bookBtn.textContent = `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
   } else if (requestedUnits === available && available > 0) {
     errorMsg.classList.remove('show');
     warningMsg.classList.add('show');
-    if (bookBtn.disabled === false) {
-      bookBtn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
-    }
+    bookBtn.disabled = false;
+    bookBtn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
   } else {
     errorMsg.classList.remove('show');
     warningMsg.classList.remove('show');
-    if (bookBtn.disabled === false) {
-      bookBtn.textContent = `✓ احجز الساعة ${time}`;
-    }
+    bookBtn.disabled = false;
+    bookBtn.textContent = `✓ احجز الساعة ${time}`;
   }
 }
 
@@ -1441,14 +1440,16 @@ function pickSlot(el, time) {
   
   let date = document.getElementById('supDate').value;
   let truckCount = parseInt(document.getElementById('supTruckCount').value) || 1;
+  let truckType = document.getElementById('supTruckType').value;
+  let requestedUnits = truckCount * truckUnitWeight(truckType);
   let whId = document.getElementById('bookingWarehouseSelect').value;
   let available = getSlotAvailableCapacity(whId, date, time);
   
-  if (truckCount > available) {
-    btn.disabled = true;
-    btn.textContent = `⛔ السعة غير كافية (متاح: ${available} عربة)`;
-  } else if (truckCount === available && available > 0) {
-    btn.textContent = `⚠️ احجز الساعة ${time} (آخر ${available} عربة)`;
+  if (requestedUnits > available) {
+    btn.disabled = false;
+    btn.textContent = `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
+  } else if (requestedUnits === available && available > 0) {
+    btn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
   } else {
     btn.textContent = `✓ احجز الساعة ${time}`;
   }
