@@ -750,6 +750,11 @@ function getSuppliersForLogin() {
   return suppliers;
 }
 
+function normalizePassword(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).trim();
+}
+
 function initWarehouseData() {
   for (let whId in WAREHOUSES) {
     if (!warehouseData[whId]) {
@@ -1989,20 +1994,20 @@ function selectRole(role) {
 
 async function doLogin() {
   let user = document.getElementById('loginUser').value.trim();
-  let pass = document.getElementById('loginPass').value;
+  let pass = normalizePassword(document.getElementById('loginPass').value);
   let err = document.getElementById('loginError');
 
   // Always load latest users from Google Sheets before attempting login
   try { await loadUsersFromApi(); } catch (e) {}
   
   if (selectedLoginRole === 'warehouse') {
-    let match = getWarehouseUsersForLogin().find(u => u.username === user && u.password === pass);
+    let match = getWarehouseUsersForLogin().find(u => u.username === user && normalizePassword(u.password) === pass);
     if (!match) { err.classList.add('show'); return; }
     err.classList.remove('show');
     applyWarehouseLogin(match);
     saveSessionState({ role: 'warehouse', username: match.username });
   } else if (selectedLoginRole === 'supplier') {
-    let match = getSuppliersForLogin().find(u => u.username === user && u.password === pass);
+    let match = getSuppliersForLogin().find(u => u.username === user && normalizePassword(u.password) === pass);
     if (!match) { err.classList.add('show'); return; }
     err.classList.remove('show');
     applySupplierLogin(match);
