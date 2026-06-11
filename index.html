@@ -1770,7 +1770,10 @@ function applyWarehouseLogin(match) {
     if (rSel) { rSel.disabled = false; rSel.value = ''; rSel.style.opacity = 1; rSel.style.cursor = 'pointer'; }
   }
 
-  renderWarehouse();
+  // Load latest shared data before rendering
+  ensureDataLoaded().then(() => {
+    renderWarehouse();
+  });
 }
 
 function applySupplierLogin(match) {
@@ -1787,7 +1790,10 @@ function applySupplierLogin(match) {
   document.getElementById('topbar').style.display = 'flex';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-supplier').classList.add('active');
-  renderSupplierSlots();
+  // Load latest shared data before rendering
+  ensureDataLoaded().then(() => {
+    renderSupplierSlots();
+  });
 }
 
 let selectedLoginRole = 'warehouse';
