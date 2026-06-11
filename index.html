@@ -1534,7 +1534,7 @@ function closeSignupModal() {
     console.error(e);
   }
 }
-function doSignup() {
+async function doSignup() {
   let company = document.getElementById('signupCompany').value.trim();
   let warehouse = document.getElementById('signupWarehouse').value;
   let username = document.getElementById('signupUsername').value.trim();
@@ -1547,10 +1547,31 @@ function doSignup() {
   if (!/^\S+@\S+\.\S+$/.test(email)) { alert('يرجى إدخال بريد إلكتروني صحيح'); return; }
   if (!password) { alert('يرجى إدخال كلمة المرور'); return; }
   if (password !== confirm) { alert('كلمة المرور غير متطابقة'); return; }
+
+  // Ensure latest supplier users loaded from Sheets first
+  try { await loadUsersFromApi(); } catch(e) {}
   if (suppliers.find(s => s.username === username)) { alert('اسم المستخدم موجود بالفعل'); return; }
   if (suppliers.find(s => (s.email||'').toLowerCase() === email)) { alert('البريد الإلكتروني مستخدم بالفعل'); return; }
+
+  // Save locally (fallback)
   suppliers.push({ username, email, password, company, defaultWarehouse: warehouse, createdAt: new Date().toISOString() });
   localStorage.setItem('suppliers', JSON.stringify(suppliers));
+
+  // Save to Google Sheets (shared across devices)
+  try {
+    await apiPost('upsertSupplier', {
+      username,
+      email,
+      password,
+      company,
+      defaultWarehouse: warehouse,
+      updatedAt: nowIso(),
+    });
+    await loadUsersFromApi();
+  } catch (e) {
+    console.error(e);
+  }
+
   alert('✅ تم إنشاء الحساب بنجاح!');
   closeSignupModal();
   document.getElementById('loginUser').value = username;
