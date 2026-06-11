@@ -477,7 +477,7 @@ function closeSignupModal(){
           <option>تريلا بدون بالتات</option>
         </select></div>
         <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="0.5" max="20" step="0.5" value="1" oninput="checkCapacity()"></div>
-        <div class="form-group"><label>عدد الكراتين <span style="color:red">*</span></label><input type="number" id="supCartons" min="1" max="5000" value="1"></div>
+        <div class="form-group"><label>عدد الكراتين <span style="color:red">*</span></label><input type="number" id="supCartons" min="1" max="5000" value="1" oninput="clampCartons()"></div>
       </div>
       <!-- تم حذف خيار التحميل على بالتات -->
       <div class="form-row"><div class="form-group"><label>التاريخ <span style="color:red">*</span></label><input type="date" id="supDate" onchange="renderSupplierSlots()"></div></div>
@@ -1194,6 +1194,15 @@ function showAlert(id, msg, type) {
   el.textContent = msg;
   el.className = 'alert alert-'+(type==='error'?'error':'success')+' show';
   setTimeout(() => el.classList.remove('show'), 5000);
+}
+
+function clampCartons() {
+  const el = document.getElementById('supCartons');
+  if (!el) return;
+  let v = parseInt(el.value);
+  if (!Number.isFinite(v)) return;
+  if (v > 5000) el.value = '5000';
+  if (v < 1) el.value = '1';
 }
 
 // ==================== CAPACITY CHECK ====================
