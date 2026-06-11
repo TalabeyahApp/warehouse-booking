@@ -477,9 +477,9 @@ function closeSignupModal(){
           <option>تريلا بدون بالتات</option>
         </select></div>
         <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="0.5" max="20" step="0.5" value="1" oninput="checkCapacity()"></div>
-        <div class="form-group"><label>عدد الكراتين <span style="color:red">*</span></label><input type="number" id="supCartons" min="1" value="1"></div>
+        <div class="form-group"><label>عدد الكراتين <span style="color:red">*</span></label><input type="number" id="supCartons" min="1" max="5000" value="1"></div>
       </div>
-      <div class="form-group"><label>التحميل على بالتات</label><div class="radio-group"><label><input type="radio" name="palletLoading" value="نعم"> نعم</label><label><input type="radio" name="palletLoading" value="لا" checked> لا</label></div></div>
+      <!-- تم حذف خيار التحميل على بالتات -->
       <div class="form-row"><div class="form-group"><label>التاريخ <span style="color:red">*</span></label><input type="date" id="supDate" onchange="renderSupplierSlots()"></div></div>
       <div class="form-group"><label>ملاحظات</label><textarea id="supNotes" placeholder="أي تفاصيل إضافية..."></textarea></div>
       <button class="btn-primary" id="bookBtn" disabled>اختر الوقت أولاً ↓</button>
@@ -865,6 +865,15 @@ async function loadWarehouseDataFromApi() {
       } catch { return ''; }
     }
 
+    function parseNum(v, fallback = 0) {
+      if (v === '' || v === null || v === undefined) return fallback;
+      if (typeof v === 'number') return v;
+      // Handle decimal comma (e.g., "0,75") that can appear in some locales
+      const s = String(v).trim().replace(',', '.');
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
     bookings.forEach(b => {
       const whId = b.warehouseId || b.warehouse || b.warehouseid;
       if (!whId || !warehouseData[whId]) return;
@@ -879,9 +888,9 @@ async function loadWarehouseDataFromApi() {
         driver: b.driver || '',
         truckType: b.truckType || '',
         // truckCount can be fractional when a heavy truck is split across slots
-        truckCount: (b.truckCount === '' || b.truckCount === null || b.truckCount === undefined) ? 1 : (parseFloat(b.truckCount) || 0),
-        unitsConsumed: (b.unitsConsumed === '' || b.unitsConsumed === null || b.unitsConsumed === undefined) ? '' : (parseFloat(b.unitsConsumed) || 0),
-        cartons: parseInt(b.cartons) || 1,
+        truckCount: parseNum(b.truckCount, 1),
+        unitsConsumed: (b.unitsConsumed === '' || b.unitsConsumed === null || b.unitsConsumed === undefined) ? '' : parseNum(b.unitsConsumed, 0),
+        cartons: Math.round(parseNum(b.cartons, 1)),
         palletLoading: b.palletLoading || '',
         date: normalizeDate(b.date),
         time: normalizeTime(b.time),
@@ -1477,7 +1486,7 @@ function submitBooking() {
   let truckType = document.getElementById('supTruckType').value;
   let truckCount = parseFloat(document.getElementById('supTruckCount').value);
   let cartons = parseInt(document.getElementById('supCartons').value);
-  let palletLoading = document.querySelector('input[name="palletLoading"]:checked').value;
+  let palletLoading = '';
   let qty = '';
   let notes = document.getElementById('supNotes').value.trim();
   let date = document.getElementById('supDate').value;
@@ -1540,7 +1549,7 @@ function submitBooking() {
       truckCount: allocateTrucks,
       unitsConsumed: allocateUnits,
       cartons,
-      palletLoading,
+      // palletLoading removed
       qty,
       notes,
       date,
@@ -1582,7 +1591,7 @@ function submitBooking() {
   document.getElementById('supTruckType').value = '';
   document.getElementById('supTruckCount').value = '1';
   document.getElementById('supCartons').value = '1';
-  document.querySelector('input[name="palletLoading"][value="لا"]').checked = true;
+  // palletLoading removed
   
   selectedSlot = null;
   renderSupplierSlots();
