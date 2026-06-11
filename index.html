@@ -466,8 +466,17 @@ function closeSignupModal(){
         <div class="form-group"><label>اسم السائق</label><input type="text" id="supDriver" placeholder="محمد أحمد"></div>
       </div>
       <div class="form-row-3">
-        <div class="form-group"><label>نوع العربية <span style="color:red">*</span></label><select id="supTruckType"><option value="">اختر...</option><option>جامبو</option><option>دبابة</option><option>تريلا</option></select></div>
-        <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="1" max="5" value="1" oninput="checkCapacity()"></div>
+        <div class="form-group"><label>نوع العربية <span style="color:red">*</span></label><select id="supTruckType">
+          <option value="">اختر...</option>
+          <option>دبابة نص حمولة</option>
+          <option>دبابة حمولة كاملة</option>
+          <option>جامبو برامب</option>
+          <option>جامبو بدون رامب بالتات</option>
+          <option>جامبو بدون رامب بدون بالتات</option>
+          <option>تريلا بالتات</option>
+          <option>تريلا بدون بالتات</option>
+        </select></div>
+        <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="1" max="20" value="1" oninput="checkCapacity()"></div>
         <div class="form-group"><label>عدد الكراتين <span style="color:red">*</span></label><input type="number" id="supCartons" min="1" value="1"></div>
       </div>
       <div class="form-group"><label>التحميل على بالتات</label><div class="radio-group"><label><input type="radio" name="palletLoading" value="نعم"> نعم</label><label><input type="radio" name="palletLoading" value="لا" checked> لا</label></div></div>
@@ -658,12 +667,36 @@ const WAREHOUSES = {
 };
 
 const SLOTS_PER_DAY = [
-  '09:00','09:30','10:00','10:30','11:00','11:30',
-  '12:00','12:30','13:00','13:30','14:00','14:30',
-  '15:00','15:30','16:00'
+  '09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00'
 ];
 
-const SLOT_CAPACITY = 5;
+// Slot capacity: default 6, but 11:00 and 12:00 are 7
+function slotCapacity(time) {
+  if (time === '11:00' || time === '12:00') return 7;
+  return 6;
+}
+
+function fmtCap(n) {
+  // show .5 nicely
+  if (n === null || n === undefined) return '';
+  let x = Math.round(n * 2) / 2;
+  return (x % 1 === 0) ? String(x) : String(x).replace('.5', '.5');
+}
+
+// Truck type weights (capacity consumption)
+const TRUCK_TYPE_WEIGHTS = {
+  'دبابة نص حمولة': 0.5,
+  'دبابة حمولة كاملة': 1.5,
+  'جامبو برامب': 0.5,
+  'جامبو بدون رامب بالتات': 1,
+  'جامبو بدون رامب بدون بالتات': 2,
+  'تريلا بالتات': 3,
+  'تريلا بدون بالتات': 8,
+};
+
+function truckUnitWeight(truckType) {
+  return TRUCK_TYPE_WEIGHTS[truckType] ?? 1;
+}
 
 let warehouseData = {};
 // ==================== USERS ====================
@@ -1105,11 +1138,15 @@ function getSlotBookedCount(whId, date, time) {
     b.status !== 'rejected' &&
     b.status !== 'cancelled'
   );
-  return slotBookings.reduce((sum, b) => sum + (parseInt(b.truckCount) || 1), 0);
+  return slotBookings.reduce((sum, b) => {
+    const count = parseInt(b.truckCount) || 1;
+    const weight = truckUnitWeight(b.truckType);
+    return sum + (count * weight);
+  }, 0);
 }
 
 function getSlotAvailableCapacity(whId, date, time) {
-  return SLOT_CAPACITY - getSlotBookedCount(whId, date, time);
+  return slotCapacity(time) - getSlotBookedCount(whId, date, time);
 }
 
 // Close slots that have already passed in real time (based on user's local time)
@@ -1129,7 +1166,7 @@ function slotStatus(whId, date, time) {
   if (isBlocked(whId, date, time)) return 'blocked';
   let available = getSlotAvailableCapacity(whId, date, time);
   if (available <= 0) return 'full';
-  if (available === 1) return 'warning';
+  if (available <= 1) return 'warning';
   return 'available';
 }
 
@@ -1150,6 +1187,9 @@ function checkCapacity() {
   let selectedTimeElem = document.querySelector('.slot-pick.selected');
   let time = selectedTimeElem ? selectedTimeElem.getAttribute('data-time') : null;
   let whId = document.getElementById('bookingWarehouseSelect').value;
+  let truckType = document.getElementById('supTruckType').value;
+  let unitWeight = truckUnitWeight(truckType);
+  let requestedUnits = truckCount * unitWeight;
   
   let warningMsg = document.getElementById('capacityWarningMsg');
   let errorMsg = document.getElementById('capacityErrorMsg');
@@ -1163,16 +1203,16 @@ function checkCapacity() {
   
   let available = getSlotAvailableCapacity(whId, date, time);
   
-  if (truckCount > available) {
+  if (requestedUnits > available) {
     errorMsg.classList.add('show');
     warningMsg.classList.remove('show');
     bookBtn.disabled = true;
-    bookBtn.textContent = `⛔ السعة غير كافية (متاح: ${available} عربة)`;
-  } else if (truckCount === available && available > 0) {
+    bookBtn.textContent = `⛔ السعة غير كافية (متاح: ${fmtCap(Math.max(available,0))} وحدة)`;
+  } else if (requestedUnits === available && available > 0) {
     errorMsg.classList.remove('show');
     warningMsg.classList.add('show');
     if (bookBtn.disabled === false) {
-      bookBtn.textContent = `⚠️ احجز الساعة ${time} (آخر ${available} عربة)`;
+      bookBtn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
     }
   } else {
     errorMsg.classList.remove('show');
@@ -1192,15 +1232,21 @@ function renderWarehouse() {
   let whData = warehouseData[whId];
   let dayBookings = whData.bookings.filter(b => b.date === date && b.status !== 'rejected');
   
-  let totalCapacity = SLOTS_PER_DAY.length * SLOT_CAPACITY;
-  let bookedTrucks = dayBookings.reduce((sum, b) => sum + (b.truckCount || 1), 0);
+  let totalCapacity = SLOTS_PER_DAY.reduce((sum, t) => sum + slotCapacity(t), 0);
+  let bookedTrucks = dayBookings.reduce((sum, b) => sum + ((parseInt(b.truckCount)||1) * truckUnitWeight(b.truckType)), 0);
   let blocked = whData.blockedSlots.filter(k => k.startsWith(date+'|')).length;
-  let availableCapacity = totalCapacity - bookedTrucks - (blocked * SLOT_CAPACITY);
+  // Each blocked slot removes its full capacity
+  let blockedCapacity = whData.blockedSlots.filter(k => k.startsWith(date+'|')).reduce((s,k)=>{
+    let parts = k.split('|');
+    let time = parts[1] || '';
+    return s + slotCapacity(time);
+  },0);
+  let availableCapacity = totalCapacity - bookedTrucks - blockedCapacity;
   if (availableCapacity < 0) availableCapacity = 0;
 
   document.getElementById('whStats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">السعة المتاحة</div><div class="stat-val green">${availableCapacity}</div><div style="font-size:10px">من ${totalCapacity} عربة</div></div>
-    <div class="stat-card"><div class="stat-label">عربيات محجوزة</div><div class="stat-val accent">${bookedTrucks}</div></div>
+    <div class="stat-card"><div class="stat-label">السعة المتاحة</div><div class="stat-val green">${fmtCap(availableCapacity)}</div><div style="font-size:10px">من ${fmtCap(totalCapacity)} وحدة</div></div>
+    <div class="stat-card"><div class="stat-label">محجوز</div><div class="stat-val accent">${fmtCap(bookedTrucks)}</div></div>
     <div class="stat-card"><div class="stat-label">Slots مغلقة</div><div class="stat-val">${blocked}</div></div>
     <div class="stat-card"><div class="stat-label">إجمالي الحجوزات</div><div class="stat-val">${dayBookings.length}</div></div>
   `;
@@ -1209,22 +1255,23 @@ function renderWarehouse() {
   grid.innerHTML = SLOTS_PER_DAY.map(time => {
     let st = slotStatus(whId, date, time);
     let bookedCount = getSlotBookedCount(whId, date, time);
-    let available = SLOT_CAPACITY - bookedCount;
+    let available = slotCapacity(time) - bookedCount;
     let bookingsInSlot = whData.bookings.filter(b => b.date === date && b.time === time && b.status !== 'rejected');
     
     let info = '';
     if (bookingsInSlot.length > 0) {
-      info = `<div class="slot-info"><strong>${bookingsInSlot.length} حجز</strong><br>${bookedCount}/${SLOT_CAPACITY} عربة<br>`;
+      info = `<div class="slot-info"><strong>${bookingsInSlot.length} حجز</strong><br>${fmtCap(bookedCount)}/${slotCapacity(time)} وحدة<br>`;
       bookingsInSlot.slice(0, 2).forEach(b => {
-        info += `${b.supplier.substring(0, 12)} (${b.truckCount}ع)<br>`;
+        let u = (parseInt(b.truckCount)||1) * truckUnitWeight(b.truckType);
+        info += `${b.supplier.substring(0, 12)} (${fmtCap(u)} وحدة)<br>`;
       });
       if (bookingsInSlot.length > 2) info += `+${bookingsInSlot.length-2} آخرين`;
       info += `</div>`;
     }
     
-    let label = {available:'متاح',booked:'محجوز',blocked:'مغلق',full:'ممتلئ',warning:'متبقي 1'}[st];
-    let capacityClass = available > 0 ? (available === 1 ? 'capacity-warning' : '') : 'capacity-full';
-    let capacityText = available > 0 ? (available === 1 ? '⚠️ متبقي: 1 عربة فقط' : `متاح: ${available} عربة`) : 'مكتمل';
+    let label = {available:'متاح',booked:'محجوز',blocked:'مغلق',full:'ممتلئ',warning:'متبقي'}[st];
+    let capacityClass = available > 0 ? (available <= 1 ? 'capacity-warning' : '') : 'capacity-full';
+    let capacityText = available > 0 ? (available <= 1 ? `⚠️ متبقي: ${fmtCap(available)} وحدة فقط` : `متاح: ${fmtCap(available)} وحدة`) : 'مكتمل';
     let clickFn = (st === 'available' || st === 'warning') ? `onclick="toggleBlock('${date}','${time}')"` : '';
     
     return `<div class="slot-card ${st === 'warning' ? 'available' : st}" ${clickFn}>
@@ -1314,7 +1361,7 @@ function renderSupplierSlots() {
   grid.innerHTML = SLOTS_PER_DAY.map(time => {
     let st = slotStatus(whId, date, time);
     let bookedCount = getSlotBookedCount(whId, date, time);
-    let available = SLOT_CAPACITY - bookedCount;
+    let available = slotCapacity(time) - bookedCount;
     let taken = (st === 'blocked' || st === 'full' || st === 'past');
     let cap = '';
     let extraClass = '';
@@ -1331,17 +1378,17 @@ function renderSupplierSlots() {
       extraClass = 'taken';
       taken = true;
     } else if (st === 'warning') {
-      cap = `⚠️ متبقي 1 عربة فقط`;
+      cap = `⚠️ متبقي ${fmtCap(Math.max(available,0))} عربة فقط`;
       extraClass = 'warning';
     } else {
-      cap = `✅ متاح (${available} عربة)`;
+      cap = `✅ متاح (${fmtCap(Math.max(available,0))} عربة)`;
     }
     
     let onclickAttr = (!taken && st !== 'full') ? `onclick="pickSlot(this,'${time}')"` : '';
     return `<div class="slot-pick ${taken?'taken':''} ${extraClass}" data-time="${time}" ${onclickAttr}>
       <div class="sp-time">${time}</div>
       <div class="sp-cap">${cap}</div>
-      <div class="sp-capacity ${extraClass}">🚛 سعة ${SLOT_CAPACITY}</div>
+      <div class="sp-capacity ${extraClass}">🚛 سعة ${slotCapacity(time)}</div>
     </div>`;
   }).join('');
 }
@@ -1429,14 +1476,15 @@ function submitBooking() {
   // Optional: orderNum, plate, driver
   if (!goodsType) { showAlert('bookAlert', 'يرجى اختيار نوع البضاعة', 'error'); return; }
   if (!truckType) { showAlert('bookAlert', 'يرجى اختيار نوع العربية', 'error'); return; }
-  if (truckCount <= 0 || truckCount > 5) { showAlert('bookAlert', 'عدد العربيات يجب أن يكون بين 1 و 5', 'error'); return; }
+  if (truckCount <= 0 || truckCount > 20) { showAlert('bookAlert', 'عدد العربيات يجب أن يكون بين 1 و 20', 'error'); return; }
   if (cartons <= 0) { showAlert('bookAlert', 'عدد الكراتين يجب أن يكون أكبر من صفر', 'error'); return; }
   if (!date) { showAlert('bookAlert', 'يرجى اختيار التاريخ', 'error'); return; }
   if (!selectedSlot) { showAlert('bookAlert', 'يرجى اختيار الوقت', 'error'); return; }
   
   let availableCapacity = getSlotAvailableCapacity(whId, date, selectedSlot);
-  if (availableCapacity < truckCount) {
-    showAlert('bookAlert', `❌ لا يمكن حجز ${truckCount} عربيات! السعة المتبقية في هذا الموعد هي ${availableCapacity} عربية فقط.`, 'error');
+  let requestedUnits = (truckCount * truckUnitWeight(truckType));
+  if (requestedUnits > availableCapacity) {
+    showAlert('bookAlert', `❌ لا يمكن حجز هذا العدد! السعة المتبقية في هذا الموعد هي ${fmtCap(Math.max(availableCapacity,0))} وحدة فقط.`, 'error');
     return;
   }
   
