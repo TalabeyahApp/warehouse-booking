@@ -2711,12 +2711,12 @@ document.getElementById('showTrackerBtn').onclick = () => document.getElementByI
 document.getElementById('closeModalBtn').onclick = closeModal;
 document.getElementById('modalOverlay').onclick = closeModal;
 document.getElementById('filterStatus').onchange = renderBookingsTable;
-document.getElementById('filterDate').onchange = renderBookingsTable;
+document.getElementById('filterDate').onchange = () => {
+  refreshDataWithLoader().then(() => renderBookingsTable());
+};
 document.getElementById('filterSearch').oninput = renderBookingsTable;
 document.getElementById('supDate').onchange = () => { refreshDataWithLoader().then(() => { renderSupplierSlots(); checkCapacity(); }); };
-document.getElementById('myBookingsDate').onchange = () => {
-  refreshDataWithLoader().then(() => renderMyBookings());
-};
+document.getElementById('myBookingsDate').onchange = renderMyBookings;
 document.getElementById('supTruckCount').oninput = checkCapacity;
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
 document.getElementById('exportAllBtn').onclick = exportAllSheets;
