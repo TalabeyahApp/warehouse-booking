@@ -2399,6 +2399,31 @@ let currentWarehouseAccess = 'all'; // 'all' | 'single'
 let currentRole = null;
 const SESSION_STORAGE_KEY = 'sessionState';
 
+// ==================== AUTO SIGN-OUT (IDLE) ====================
+const IDLE_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
+let idleTimer = null;
+function resetIdleTimer() {
+  try {
+    if (!currentRole) return;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      // Sign out after inactivity
+      try { doLogout(); } catch(e) {}
+      alert('تم تسجيل الخروج تلقائيًا بسبب عدم النشاط لمدة ساعة');
+    }, IDLE_TIMEOUT_MS);
+  } catch(e) {}
+}
+function startIdleTracking() {
+  // Track common activity events
+  ['mousemove','mousedown','keydown','touchstart','scroll'].forEach(ev => {
+    window.addEventListener(ev, resetIdleTimer, { passive: true });
+  });
+  resetIdleTimer();
+}
+function stopIdleTracking() {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+}
+
 function saveSessionState(state) {
   try { localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state || {})); } catch(e) {}
 }
@@ -2421,7 +2446,14 @@ function applyWarehouseLogin(match) {
     ${currentWarehouseAccess !== 'single' ? '<button class="tab-btn" onclick="openUsersModal()">👤 مستخدمي المخازن</button>' : ''}
     ${currentWarehouseAccess !== 'single' ? '<button class="tab-btn" onclick="openSupplierUsersModal()">🚚 مستخدمي الموردين</button>' : ''}
   `;
-  document.getElementById('userPillLabel').textContent = match.label || '—';
+  // Show user label + warehouse name (when applicable)
+  let whNameForPill = '';
+  if (currentWarehouseAccess === 'single' && match.warehouseId && WAREHOUSES[match.warehouseId]) {
+    whNameForPill = WAREHOUSES[match.warehouseId].name;
+  }
+  // Format: "مسؤول - Talabeya-NSR" (no "المخزن الأول")
+  const roleLabel = 'مسؤول';
+  document.getElementById('userPillLabel').textContent = roleLabel + (whNameForPill ? ` - ${whNameForPill}` : '');
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('topbar').style.display = 'flex';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -2465,6 +2497,7 @@ function applyWarehouseLogin(match) {
   ensureDataLoaded().then(() => {
     renderWarehouse();
     startAutoSync();
+    startIdleTracking();
   });
 }
 
@@ -2487,6 +2520,7 @@ function applySupplierLogin(match) {
     renderSupplierSlots();
     renderMyBookings();
     startAutoSync();
+    startIdleTracking();
   });
 }
 
@@ -2546,6 +2580,7 @@ function doLogout() {
   selectedSlot = null;
   currentWarehouseAccess = 'all';
   stopAutoSync();
+  stopIdleTracking();
   clearSessionState();
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
