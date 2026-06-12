@@ -597,14 +597,16 @@ function closeSignupModal(){
       </div>
       <div class="report-kpis">
         <div class="kpi"><div class="v" id="rBookingsKpiTotal">0</div><div class="l">إجمالي</div></div>
+        <div class="kpi"><div class="v" id="rBookingsKpiPending">0</div><div class="l">معلق</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiApproved">0</div><div class="l">مؤكد</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiCompleted">0</div><div class="l">مكتمل</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiNotDelivered">0</div><div class="l">لم يتم التسليم</div></div>
+        <div class="kpi"><div class="v" id="rBookingsKpiCancelled">0</div><div class="l">ملغي</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiRejected">0</div><div class="l">مرفوض</div></div>
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>رقم الحجز</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>دخول</th><th>خروج</th><th>المورد</th><th>الحالة</th></tr></thead>
+          <thead><tr><th>رقم الحجز</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>دخول</th><th>خروج</th><th>المورد</th><th>نوع البضاعة</th><th>نوع العربية</th><th>الحالة</th></tr></thead>
           <tbody id="rBookingsPreview"></tbody>
         </table>
       </div>
@@ -1389,7 +1391,8 @@ function renderWarehouse() {
       info = `<div class="slot-info"><strong>${bookingsInSlot.length} حجز</strong><br>${fmtCap(bookedCount)}/${cap} عربية<br>`;
       bookingsInSlot.slice(0, 2).forEach(b => {
         let t = parseFloat(b.truckCount) || 0;
-        info += `${b.supplier.substring(0, 12)} (${fmtCap(t)} عربية)<br>`;
+        let q = (b.queueNo !== undefined && b.queueNo !== null && b.queueNo !== '') ? b.queueNo : '-';
+        info += `#${q} · ${b.supplier.substring(0, 12)} (${fmtCap(t)} عربية)<br>`;
       });
       if (bookingsInSlot.length > 2) info += `+${bookingsInSlot.length-2} آخرين`;
       info += `</div>`;
@@ -1665,9 +1668,9 @@ function submitBooking() {
   let groupId = genBookingId(whId);
   let createdIds = [];
 
-  // Compute next queue number for (warehouse,date)
-  function nextQueueNo() {
-    let list = (warehouseData[whId]?.bookings || []).filter(b => b.date === date);
+  // Compute next queue number per slot (warehouse,date,time)
+  function nextQueueNo(slotTime) {
+    let list = (warehouseData[whId]?.bookings || []).filter(b => b.date === date && b.time === slotTime);
     let maxQ = 0;
     list.forEach(b => {
       let q = parseInt(b.queueNo);
@@ -1713,7 +1716,7 @@ function submitBooking() {
     let booking = {
       id: bookingId,
       groupId,
-      queueNo: nextQueueNo(),
+      queueNo: nextQueueNo(slotTime),
       warehouse: whId,
       supplier,
       orderNum: orderNum || '',
@@ -2610,23 +2613,27 @@ function renderBookingsCard() {
   list = filterBookingsByRange(list, fromStr, toStr, status);
 
   let kTotal = list.length;
+  let kPending = list.filter(b=>b.status==='pending').length;
   let kApproved = list.filter(b=>b.status==='approved').length;
   let kCompleted = list.filter(b=>b.status==='completed').length;
   let kNotDelivered = list.filter(b=>b.status==='not_delivered').length;
+  let kCancelled = list.filter(b=>b.status==='cancelled').length;
   let kRejected = list.filter(b=>b.status==='rejected').length;
   setText('rBookingsKpiTotal', kTotal);
+  setText('rBookingsKpiPending', kPending);
   setText('rBookingsKpiApproved', kApproved);
   setText('rBookingsKpiCompleted', kCompleted);
   setText('rBookingsKpiNotDelivered', kNotDelivered);
+  setText('rBookingsKpiCancelled', kCancelled);
   setText('rBookingsKpiRejected', kRejected);
 
   let html = '';
   list.slice(0, 30).forEach(b => {
     const inT = b.checkInTime ? new Date(b.checkInTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
     const outT = b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
-    html += `<tr><td>${b.id}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${statusLabel(b.status)}</td></tr>`;
+    html += `<tr><td>${b.id}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${b.goodsType||''}</td><td>${b.truckType||''}</td><td>${statusLabel(b.status)}</td></tr>`;
   });
-  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="8" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="10" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
 
 function renderUtilizationCard() {
