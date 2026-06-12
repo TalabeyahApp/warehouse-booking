@@ -1489,9 +1489,14 @@ function cancelBooking(whId, id) {
   if(confirm('هل أنت متأكد من إلغاء هذا الحجز؟')){ 
     let b = warehouseData[whId].bookings.find(b=>b.id===id);
     if(b){
-      b.status = 'cancelled';
-      b.cancelledAt = new Date().toISOString();
-      upsertBookingToApi(whId, b);
+      let gid = (b.groupId || b.id || '').trim();
+      (warehouseData[whId]?.bookings || []).forEach(x => {
+        if ((x.groupId || x.id || '').trim() === gid) {
+          x.status = 'cancelled';
+          x.cancelledAt = new Date().toISOString();
+          upsertBookingToApi(whId, x);
+        }
+      });
     }
     saveWarehouseData(whId);
     renderWarehouse(); 
@@ -1502,13 +1507,17 @@ function cancelBooking(whId, id) {
 
 function completeBooking(whId, id) { 
   let b = warehouseData[whId].bookings.find(b=>b.id===id); 
-  if(b){
-    b.status='completed';
-    upsertBookingToApi(whId, b);
-    saveWarehouseData(whId);
-    renderBookingsTable();
-    renderWarehouse();
-  } 
+  if(!b) return;
+  let gid = (b.groupId || b.id || '').trim();
+  (warehouseData[whId]?.bookings || []).forEach(x => {
+    if ((x.groupId || x.id || '').trim() === gid) {
+      x.status = 'completed';
+      upsertBookingToApi(whId, x);
+    }
+  });
+  saveWarehouseData(whId);
+  renderBookingsTable();
+  renderWarehouse();
 }
 
 // ==================== SUPPLIER PAGE ====================
@@ -1619,60 +1628,14 @@ function renderMyBookings() {
       <td>
         <div class="action-btns">
           <button class="btn-sm btn-details" type="button" onclick="trackMyBooking('${g.groupId}')">تتبع</button>
-          ${canCancel ? `<button class=\"btn-sm btn-cancel\" type=\"button\" onclick=\"cancelMyGroup('${g.groupId}')\">إلغاء الكل</button>` : ''}
+          
         </div>
       </td>
     </tr>`;
   }).join('');
 }
 
-function cancelMyBooking(whId, id) {
-  if (!currentSupplierData) return;
-  // Supplier can only cancel their own booking
-  let supplierName = (currentSupplierData.company || '').trim();
-  let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
-  if (!b) return;
-  if ((b.supplier || '').trim() !== supplierName) {
-    alert('غير مسموح: هذا الحجز ليس تابعًا لك');
-    return;
-  }
-  if (!(b.status === 'approved' || b.status === 'pending')) {
-    alert('لا يمكن إلغاء هذا الحجز بعد تغيير حالته');
-    return;
-  }
-  if (!confirm('هل تريد إلغاء هذا الحجز؟')) return;
-  b.status = 'cancelled';
-  b.cancelledAt = new Date().toISOString();
-  upsertBookingToApi(whId, b);
-  saveWarehouseData(whId);
-  renderMyBookings();
-  renderSupplierSlots();
-  alert('✅ تم إلغاء الحجز');
-}
 
-function cancelMyGroup(groupId) {
-  if (!currentSupplierData) return;
-  let supplierName = (currentSupplierData.company || '').trim();
-  if (!confirm('هل تريد إلغاء هذا الحجز بالكامل؟')) return;
-  let any = false;
-  for (let whId in warehouseData) {
-    (warehouseData[whId]?.bookings || []).forEach(b => {
-      if ((b.groupId||b.id||'').trim() === String(groupId).trim() && (b.supplier||'').trim() === supplierName) {
-        if (b.status === 'approved' || b.status === 'pending') {
-          b.status = 'cancelled';
-          b.cancelledAt = new Date().toISOString();
-          upsertBookingToApi(whId, b);
-          any = true;
-        }
-      }
-    });
-    saveWarehouseData(whId);
-  }
-  renderMyBookings();
-  renderSupplierSlots();
-  if (any) alert('✅ تم إلغاء الحجز بالكامل');
-  else alert('لا يوجد أجزاء يمكن إلغاؤها');
-}
 
 function trackMyBooking(id) {
   document.getElementById('trackerWrap').style.display = 'block';
@@ -1958,8 +1921,13 @@ function renderBookingsTable() {
 function markNotDelivered(whId, id) {
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
-  b.status = 'not_delivered';
-  upsertBookingToApi(whId, b);
+  let gid = (b.groupId || b.id || '').trim();
+  (warehouseData[whId]?.bookings || []).forEach(x => {
+    if ((x.groupId || x.id || '').trim() === gid) {
+      x.status = 'not_delivered';
+      upsertBookingToApi(whId, x);
+    }
+  });
   saveWarehouseData(whId);
   renderBookingsTable();
   renderWarehouse();
@@ -1984,8 +1952,14 @@ function checkOutBooking(whId, id) {
   }
   if (!b.checkOutTime) b.checkOutTime = new Date().toISOString();
   // Auto-complete on checkout
-  b.status = 'completed';
-  upsertBookingToApi(whId, b);
+  let gid = (b.groupId || b.id || '').trim();
+  (warehouseData[whId]?.bookings || []).forEach(x => {
+    if ((x.groupId || x.id || '').trim() === gid) {
+      if (!x.checkOutTime) x.checkOutTime = b.checkOutTime;
+      x.status = 'completed';
+      upsertBookingToApi(whId, x);
+    }
+  });
   saveWarehouseData(whId);
   renderBookingsTable();
   renderWarehouse();
