@@ -1065,7 +1065,23 @@ function buildSupplierSummary(bookings) {
   return Object.values(map).sort((a,b)=>b.totalBookings-a.totalBookings);
 }
 
+function padNum(n, len) {
+  let s = String(Math.floor(Math.abs(n)));
+  while (s.length < len) s = '0' + s;
+  return s;
+}
+
 function genId() { return 'HYG-' + Math.random().toString(36).substr(2,4).toUpperCase(); }
+
+// Booking ID: first 3 chars from warehouse code, rest numbers
+function genBookingId(whId) {
+  let code = (WAREHOUSES[whId]?.code || 'WH0');
+  let prefix = String(code).toUpperCase().slice(0,3);
+  // 6 digits from time + 2 random digits
+  let n = Date.now() % 1000000;
+  let r = Math.floor(Math.random() * 100);
+  return `${prefix}-${padNum(n,6)}${padNum(r,2)}`;
+}
 function today() {
   // Use local date (avoid UTC shift)
   const d = new Date();
@@ -1139,7 +1155,17 @@ function isBlocked(whId, date, time) {
   // Guard: warehouseData might not be initialized yet
   let ds = warehouseData[whId];
   if (!ds || !Array.isArray(ds.blockedSlots)) return false;
+  // Auto-close all slots on Friday
+  if (isFriday(date)) return true;
   return ds.blockedSlots.includes(getSlotKey(date, time));
+}
+
+function isFriday(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const [y,m,d] = dateStr.split('-').map(n => parseInt(n,10));
+  const dt = new Date(y, (m-1), d);
+  // JS: 0=Sun ... 5=Fri
+  return dt.getDay() === 5;
 }
 
 function getSlotBookedCount(whId, date, time) {
@@ -1259,7 +1285,8 @@ function renderWarehouse() {
   let dayBookings = whData.bookings.filter(b => b.date === date && b.status !== 'rejected');
   
   let totalCapacity = SLOTS_PER_DAY.reduce((sum, t) => sum + slotCapacity(t), 0);
-  let bookedTrucks = dayBookings.reduce((sum, b) => sum + ((parseInt(b.truckCount)||1) * truckUnitWeight(b.truckType)), 0);
+  // Show booked as actual trucks (can be fractional)
+  let bookedTrucks = dayBookings.reduce((sum, b) => sum + (parseFloat(b.truckCount) || 0), 0);
   let blocked = whData.blockedSlots.filter(k => k.startsWith(date+'|')).length;
   // Each blocked slot removes its full capacity
   let blockedCapacity = whData.blockedSlots.filter(k => k.startsWith(date+'|')).reduce((s,k)=>{
@@ -1267,12 +1294,16 @@ function renderWarehouse() {
     let time = parts[1] || '';
     return s + slotCapacity(time);
   },0);
-  let availableCapacity = totalCapacity - bookedTrucks - blockedCapacity;
+  // Available capacity is still computed in capacity-units
+  let bookedUnits = dayBookings.reduce((sum, b) => sum + (getSlotBookedCount(whId, b.date, b.time) ? 0 : 0), 0);
+  // We already compute per-slot elsewhere; keep day-level capacity as units by recomputing per slot
+  let usedUnits = SLOTS_PER_DAY.reduce((sum, t) => sum + getSlotBookedCount(whId, date, t), 0);
+  let availableCapacity = totalCapacity - usedUnits - blockedCapacity;
   if (availableCapacity < 0) availableCapacity = 0;
 
   document.getElementById('whStats').innerHTML = `
-    <div class="stat-card"><div class="stat-label">السعة المتاحة</div><div class="stat-val green">${fmtCap(availableCapacity)}</div><div style="font-size:10px">من ${fmtCap(totalCapacity)} وحدة</div></div>
-    <div class="stat-card"><div class="stat-label">محجوز</div><div class="stat-val accent">${fmtCap(bookedTrucks)}</div></div>
+    <div class="stat-card"><div class="stat-label">السعة المتاحة</div><div class="stat-val green">${fmtCap(availableCapacity)}</div><div style="font-size:10px">من ${fmtCap(totalCapacity)} عربية</div></div>
+    <div class="stat-card"><div class="stat-label">عربيات محجوزة</div><div class="stat-val accent">${fmtCap(bookedTrucks)}</div></div>
     <div class="stat-card"><div class="stat-label">Slots مغلقة</div><div class="stat-val">${blocked}</div></div>
     <div class="stat-card"><div class="stat-label">إجمالي الحجوزات</div><div class="stat-val">${dayBookings.length}</div></div>
   `;
@@ -1286,10 +1317,10 @@ function renderWarehouse() {
     
     let info = '';
     if (bookingsInSlot.length > 0) {
-      info = `<div class="slot-info"><strong>${bookingsInSlot.length} حجز</strong><br>${fmtCap(bookedCount)}/${slotCapacity(time)} وحدة<br>`;
+      info = `<div class="slot-info"><strong>${bookingsInSlot.length} حجز</strong><br>${fmtCap(bookedCount)}/${slotCapacity(time)} عربية<br>`;
       bookingsInSlot.slice(0, 2).forEach(b => {
-        let u = (parseInt(b.truckCount)||1) * truckUnitWeight(b.truckType);
-        info += `${b.supplier.substring(0, 12)} (${fmtCap(u)} وحدة)<br>`;
+        let t = parseFloat(b.truckCount) || 0;
+        info += `${b.supplier.substring(0, 12)} (${fmtCap(t)} عربية)<br>`;
       });
       if (bookingsInSlot.length > 2) info += `+${bookingsInSlot.length-2} آخرين`;
       info += `</div>`;
@@ -1297,7 +1328,7 @@ function renderWarehouse() {
     
     let label = {available:'متاح',booked:'محجوز',blocked:'مغلق',full:'ممتلئ',warning:'متبقي'}[st];
     let capacityClass = available > 0 ? (available <= 1 ? 'capacity-warning' : '') : 'capacity-full';
-    let capacityText = available > 0 ? (available <= 1 ? `⚠️ متبقي: ${fmtCap(available)} وحدة فقط` : `متاح: ${fmtCap(available)} وحدة`) : 'مكتمل';
+    let capacityText = available > 0 ? (available <= 1 ? `⚠️ متبقي: ${fmtCap(available)} عربية فقط` : `متاح: ${fmtCap(available)} عربية`) : 'مكتمل';
     let clickFn = (st === 'available' || st === 'warning') ? `onclick="toggleBlock('${date}','${time}')"` : '';
     
     return `<div class="slot-card ${st === 'warning' ? 'available' : st}" ${clickFn}>
@@ -1322,6 +1353,11 @@ function changeDay(n) {
 
 function toggleBlock(date, time) {
   let whId = currentWarehouse;
+  // Admin-only: only users with access "all" can open/close slots
+  if (currentWarehouseAccess !== 'all') {
+    alert('غير مسموح: هذا الإجراء للادمن فقط');
+    return;
+  }
   let k = getSlotKey(date, time);
   let i = warehouseData[whId].blockedSlots.indexOf(k);
   let isBlockedNow = false;
@@ -1520,9 +1556,11 @@ function submitBooking() {
   const startIdx = SLOTS_PER_DAY.indexOf(selectedSlot);
   if (startIdx < 0) { showAlert('bookAlert', 'الوقت المختار غير صحيح', 'error'); return; }
 
-  let remainingUnits = truckCount * unitWeight;
+  let totalUnitsRequested = truckCount * unitWeight;
+  let remainingUnits = totalUnitsRequested;
+  let remainingCartons = cartons;
   let createdAt = new Date().toISOString();
-  let groupId = genId();
+  let groupId = genBookingId(whId);
   let createdIds = [];
 
   for (let i = startIdx; i < SLOTS_PER_DAY.length && remainingUnits > 0; i++) {
@@ -1541,6 +1579,20 @@ function submitBooking() {
     // Derive truckCount portion for display (can be fractional)
     const allocateTrucks = allocateUnits / unitWeight;
 
+    // Split cartons proportionally to allocated units
+    let allocateCartons = 0;
+    if (Number.isFinite(remainingCartons) && remainingCartons > 0) {
+      // If this is the last chunk, give it the remainder to avoid rounding drift
+      if (allocateUnits >= remainingUnits - 1e-9) {
+        allocateCartons = remainingCartons;
+      } else {
+        let ratio = allocateUnits / totalUnitsRequested;
+        allocateCartons = Math.max(0, Math.min(remainingCartons, Math.round(cartons * ratio)));
+        // Ensure we don't allocate zero cartons repeatedly when ratio is small
+        if (allocateCartons === 0 && remainingCartons > 0) allocateCartons = 1;
+      }
+    }
+
     const bookingId = (remainingUnits === (truckCount * unitWeight) && allocateUnits === (truckCount * unitWeight))
       ? groupId
       : `${groupId}-${createdIds.length + 1}`;
@@ -1557,7 +1609,7 @@ function submitBooking() {
       truckType,
       truckCount: allocateTrucks,
       unitsConsumed: allocateUnits,
-      cartons,
+      cartons: allocateCartons,
       // palletLoading removed
       qty,
       notes,
@@ -1570,13 +1622,14 @@ function submitBooking() {
     warehouseData[whId].bookings.push(booking);
     createdIds.push(bookingId);
     remainingUnits -= allocateUnits;
+    remainingCartons -= allocateCartons;
 
     // Sync to Sheets
     upsertBookingToApi(whId, booking);
   }
 
   if (remainingUnits > 0) {
-    showAlert('bookAlert', `❌ السعة غير كافية لإكمال الحجز. المتبقي بدون حجز: ${fmtCap(remainingUnits)} وحدة.`, 'error');
+    showAlert('bookAlert', `❌ السعة غير كافية لإكمال الحجز. المتبقي بدون حجز: ${fmtCap(remainingUnits)} عربية.`, 'error');
     // NOTE: For simplicity we don't rollback inserted rows. User can cancel them.
     saveWarehouseData(whId);
     renderSupplierSlots();
@@ -1661,13 +1714,14 @@ function renderBookingsTable() {
   if (search) list = list.filter(b => b.supplier.toLowerCase().includes(search) || b.orderNum.toLowerCase().includes(search));
 
   let tbody = document.getElementById('bookingsTbody');
-  if (!list.length) { tbody.innerHTML = `<tr><td colspan="16"><div class="empty-state"><p>لا توجد حجوزات</p></div>Ndash</td></td>`; return; }
+  if (!list.length) { tbody.innerHTML = `<tr><td colspan="16"><div class="empty-state"><p>لا توجد حجوزات</p></div></td></tr>`; return; }
   let badge = {
     approved:'<span class="badge badge-green">مؤكد</span>',
     completed:'<span class="badge badge-blue">مكتمل</span>',
     cancelled:'<span class="badge badge-gray">تم الإلغاء</span>',
     rejected:'<span class="badge badge-red">مرفوض</span>',
-    pending:'<span class="badge badge-amber">معلق</span>'
+    pending:'<span class="badge badge-amber">معلق</span>',
+    not_delivered:'<span class="badge badge-red">لم يتم التسليم</span>'
   };
   tbody.innerHTML = list.map(b => `<tr>
     <td><strong>${b.id}</strong></td>
@@ -1689,10 +1743,21 @@ function renderBookingsTable() {
       <button class="btn-sm btn-details" onclick="openBookingModal('${b.warehouseId}','${b.id}')">تفاصيل</button>
       <button class="btn-sm btn-details" onclick="checkInBooking('${b.warehouseId}','${b.id}')">دخول</button>
       <button class="btn-sm btn-details" onclick="checkOutBooking('${b.warehouseId}','${b.id}')">خروج</button>
+      <button class="btn-sm btn-cancel" onclick="markNotDelivered('${b.warehouseId}','${b.id}')">لم يتم التسليم</button>
       <button class="btn-sm btn-complete" onclick="completeBooking('${b.warehouseId}','${b.id}')">مكتمل</button>
       <button class="btn-sm btn-cancel" onclick="cancelBooking('${b.warehouseId}','${b.id}')">إلغاء</button>
-    </div>Ndash
-  <tr>`).join('');
+    </div>
+  </td></tr>`).join('');
+}
+
+function markNotDelivered(whId, id) {
+  let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
+  if (!b) return;
+  b.status = 'not_delivered';
+  upsertBookingToApi(whId, b);
+  saveWarehouseData(whId);
+  renderBookingsTable();
+  renderWarehouse();
 }
 
 function checkInBooking(whId, id) {
@@ -1713,6 +1778,8 @@ function checkOutBooking(whId, id) {
     if (!confirm('لم يتم تسجيل وقت الدخول. هل تريد تسجيل الخروج الآن؟')) return;
   }
   if (!b.checkOutTime) b.checkOutTime = new Date().toISOString();
+  // Auto-complete on checkout
+  b.status = 'completed';
   upsertBookingToApi(whId, b);
   saveWarehouseData(whId);
   renderBookingsTable();
