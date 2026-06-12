@@ -1127,8 +1127,12 @@ function deriveGroupKey(b) {
   const gid = String((b && b.groupId) || '').trim();
   if (gid) return gid;
   const id = String((b && b.id) || '').trim();
-  const m = id.match(/^(.*)-\d+$/);
-  return m ? m[1] : id;
+  // Only treat it as a split suffix if there are 2+ dashes (e.g. NSR-12345678-1)
+  const parts = id.split('-').filter(Boolean);
+  if (parts.length >= 3 && /^\d+$/.test(parts[parts.length-1])) {
+    return parts.slice(0, -1).join('-');
+  }
+  return id;
 }
 
 function countUniqueTrucks(bookings, getBucketKey) {
@@ -1919,7 +1923,9 @@ function renderBookingsTable() {
   };
   tbody.innerHTML = list.map(b => {
     const groupKey = deriveGroupKey(b);
-    const isSplit = !!(String(b.id||'').trim().match(/-\d+$/));
+    const idStr = String(b.id||'').trim();
+    const parts = idStr.split('-').filter(Boolean);
+    const isSplit = (parts.length >= 3 && /^\d+$/.test(parts[parts.length-1]));
     return `<tr class="${isSplit ? 'split-line' : ''}">
     <td><strong>${b.id}</strong>${isSplit ? `<span class=\"split-pill\">Split</span>` : ''}</td>
     <td>${groupKey || '-'}</td>
