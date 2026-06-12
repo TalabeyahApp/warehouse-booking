@@ -599,6 +599,7 @@ function closeSignupModal(){
         <div class="kpi"><div class="v" id="rBookingsKpiTotal">0</div><div class="l">إجمالي</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiApproved">0</div><div class="l">مؤكد</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiCompleted">0</div><div class="l">مكتمل</div></div>
+        <div class="kpi"><div class="v" id="rBookingsKpiNotDelivered">0</div><div class="l">لم يتم التسليم</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiRejected">0</div><div class="l">مرفوض</div></div>
       </div>
       <div style="overflow-x:auto;max-height:260px">
@@ -1394,7 +1395,7 @@ function renderWarehouse() {
       info += `</div>`;
     }
     
-    let label = {available:'متاح',booked:'محجوز',blocked:'مغلق',full:'ممتلئ',warning:'متبقي'}[st];
+    let label = {available:'متاح',booked:'محجوز',blocked:'مغلق',full:'ممتلئ',warning:'متبقي',past:'مغلق'}[st];
     let capacityClass = available > 0 ? (available <= 1 ? 'capacity-warning' : '') : 'capacity-full';
     let capacityText = available > 0 ? (available <= 1 ? `⚠️ متبقي: ${fmtCap(available)} عربية فقط` : `متاح: ${fmtCap(available)} عربية`) : 'مكتمل';
     let clickFn = (st === 'available' || st === 'warning') ? `onclick="toggleBlock('${date}','${time}')"` : '';
@@ -2611,10 +2612,12 @@ function renderBookingsCard() {
   let kTotal = list.length;
   let kApproved = list.filter(b=>b.status==='approved').length;
   let kCompleted = list.filter(b=>b.status==='completed').length;
+  let kNotDelivered = list.filter(b=>b.status==='not_delivered').length;
   let kRejected = list.filter(b=>b.status==='rejected').length;
   setText('rBookingsKpiTotal', kTotal);
   setText('rBookingsKpiApproved', kApproved);
   setText('rBookingsKpiCompleted', kCompleted);
+  setText('rBookingsKpiNotDelivered', kNotDelivered);
   setText('rBookingsKpiRejected', kRejected);
 
   let html = '';
