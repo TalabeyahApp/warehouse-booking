@@ -1420,7 +1420,7 @@ function renderWarehouse() {
     let info = '';
     if (bookingsInSlot.length > 0) {
       info = `<div class="slot-info"><strong>${bookingsInSlot.length} حجز</strong><br>${fmtCap(bookedCount)}/${cap} عربية<br>`;
-      bookingsInSlot.slice(0, 2).forEach(b => {
+      bookingsInSlot.forEach(b => {
         let t = parseFloat(b.truckCount) || 0;
         let q = (b.queueNo !== undefined && b.queueNo !== null && b.queueNo !== '') ? b.queueNo : '-';
         let supplierShort = (b.supplier || '').substring(0, 12);
@@ -1428,7 +1428,7 @@ function renderWarehouse() {
         let goodsShort = (b.goodsType || '').substring(0, 12);
         info += `#${q} · ${supplierShort} — ${truckFull} — ${goodsShort} (${fmtCap(t)} عربية)<br>`;
       });
-      if (bookingsInSlot.length > 2) info += `+${bookingsInSlot.length-2} آخرين`;
+      
       info += `</div>`;
     }
     
