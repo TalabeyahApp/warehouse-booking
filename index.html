@@ -427,7 +427,7 @@ function closeSignupModal(){
     <div class="report-card-head">
       <div>
         <div class="report-card-title">📌 حجوزاتي</div>
-        <div class="report-card-sub">كل أرقام الحجز الخاصة بك (لن تختفي بعد Refresh)</div>
+        <div class="report-card-sub"></div>
       </div>
     </div>
     <div style="overflow-x:auto;max-height:220px">
@@ -606,32 +606,32 @@ function closeSignupModal(){
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>رقم الحجز</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>دخول</th><th>خروج</th><th>المورد</th><th>نوع البضاعة</th><th>نوع العربية</th><th>الحالة</th></tr></thead>
+          <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>دخول</th><th>خروج</th><th>المورد</th><th>نوع البضاعة</th><th>نوع العربية</th><th>الحالة</th></tr></thead>
           <tbody id="rBookingsPreview"></tbody>
         </table>
       </div>
       <button class="btn-export" id="exportBookingsBtn" style="margin-top:12px">⬇ Excel</button>
     </div>
 
-    <!-- Slots utilization -->
+    <!-- Goods type report -->
     <div class="report-card">
       <div class="report-card-head">
         <div>
-          <div class="report-card-title">📈 استخدام الـ Slots</div>
-          <div class="report-card-sub">تقرير يومي لنسبة الإشغال وحالات الـ Slots</div>
+          <div class="report-card-title">🧾 تقرير نوع البضاعة</div>
+          <div class="report-card-sub">ملخص حسب نوع البضاعة خلال فترة</div>
         </div>
       </div>
       <div class="report-filters">
-        <input type="date" class="date-input" id="rUtilFrom">
-        <input type="date" class="date-input" id="rUtilTo">
+        <input type="date" class="date-input" id="rGoodsFrom">
+        <input type="date" class="date-input" id="rGoodsTo">
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>التاريخ</th><th>محجوز</th><th>انتظار</th><th>مغلق</th><th>متاح</th><th>% إشغال</th></tr></thead>
-          <tbody id="rUtilPreview"></tbody>
+          <thead><tr><th>نوع البضاعة</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
+          <tbody id="rGoodsPreview"></tbody>
         </table>
       </div>
-      <button class="btn-export" id="exportUtilBtn" style="margin-top:12px">⬇ Excel</button>
+      <button class="btn-export" id="exportGoodsBtn" style="margin-top:12px">⬇ Excel</button>
     </div>
 
     <!-- Supplier summary -->
@@ -648,32 +648,32 @@ function closeSignupModal(){
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>المورد</th><th>إجمالي</th><th>مؤكد</th><th>مكتمل</th><th>مرفوض</th></tr></thead>
+          <thead><tr><th>المورد</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
           <tbody id="rSupPreview"></tbody>
         </table>
       </div>
       <button class="btn-export" id="exportSupBtn" style="margin-top:12px">⬇ Excel</button>
     </div>
 
-    <!-- Blocked slots -->
+    <!-- Truck type report -->
     <div class="report-card">
       <div class="report-card-head">
         <div>
-          <div class="report-card-title">⛔ Slots المقفولة</div>
-          <div class="report-card-sub">عرض كل الـ slots التي تم غلقها خلال فترة</div>
+          <div class="report-card-title">🚛 تقرير نوع العربية</div>
+          <div class="report-card-sub">ملخص حسب نوع العربية خلال فترة</div>
         </div>
       </div>
       <div class="report-filters">
-        <input type="date" class="date-input" id="rBlockedFrom">
-        <input type="date" class="date-input" id="rBlockedTo">
+        <input type="date" class="date-input" id="rTruckFrom">
+        <input type="date" class="date-input" id="rTruckTo">
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>المخزن</th><th>التاريخ</th><th>الوقت</th></tr></thead>
-          <tbody id="rBlockedPreview"></tbody>
+          <thead><tr><th>نوع العربية</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
+          <tbody id="rTruckPreview"></tbody>
         </table>
       </div>
-      <button class="btn-export" id="exportBlockedBtn" style="margin-top:12px">⬇ Excel</button>
+      <button class="btn-export" id="exportTruckBtn" style="margin-top:12px">⬇ Excel</button>
     </div>
   </div>
 </div>
@@ -1588,6 +1588,7 @@ function renderMyBookings() {
   }
 
   tbody.innerHTML = all.slice(0, 50).map(b => {
+    let canCancel = (b.status === 'approved' || b.status === 'pending');
     return `<tr>
       <td><strong>${b.id}</strong></td>
       <td>${b.queueNo || '-'}</td>
@@ -1595,9 +1596,38 @@ function renderMyBookings() {
       <td>${b.time || '-'}</td>
       <td>${fmtCap(parseFloat(b.truckCount) || 0)}</td>
       <td>${statusLabel(b.status)}</td>
-      <td><button class="btn-sm btn-details" type="button" onclick="trackMyBooking('${b.id}')">تتبع</button></td>
+      <td>
+        <div class="action-btns">
+          <button class="btn-sm btn-details" type="button" onclick="trackMyBooking('${b.id}')">تتبع</button>
+          ${canCancel ? `<button class=\"btn-sm btn-cancel\" type=\"button\" onclick=\"cancelMyBooking('${b.warehouseId}','${b.id}')\">إلغاء</button>` : ''}
+        </div>
+      </td>
     </tr>`;
   }).join('');
+}
+
+function cancelMyBooking(whId, id) {
+  if (!currentSupplierData) return;
+  // Supplier can only cancel their own booking
+  let supplierName = (currentSupplierData.company || '').trim();
+  let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
+  if (!b) return;
+  if ((b.supplier || '').trim() !== supplierName) {
+    alert('غير مسموح: هذا الحجز ليس تابعًا لك');
+    return;
+  }
+  if (!(b.status === 'approved' || b.status === 'pending')) {
+    alert('لا يمكن إلغاء هذا الحجز بعد تغيير حالته');
+    return;
+  }
+  if (!confirm('هل تريد إلغاء هذا الحجز؟')) return;
+  b.status = 'cancelled';
+  b.cancelledAt = new Date().toISOString();
+  upsertBookingToApi(whId, b);
+  saveWarehouseData(whId);
+  renderMyBookings();
+  renderSupplierSlots();
+  alert('✅ تم إلغاء الحجز');
 }
 
 function trackMyBooking(id) {
@@ -2508,9 +2538,9 @@ document.getElementById('rBlockedTo').onchange = refreshReportsDashboard;
 
 document.getElementById('exportDailyBtn').onclick = exportDailySchedule;
 document.getElementById('exportBookingsBtn').onclick = exportBookingsReport;
-document.getElementById('exportUtilBtn').onclick = exportSlotsUtilization;
+document.getElementById('exportGoodsBtn').onclick = exportGoodsTypeReport;
 document.getElementById('exportSupBtn').onclick = exportSupplierSummary;
-document.getElementById('exportBlockedBtn').onclick = exportBlockedSlots;
+document.getElementById('exportTruckBtn').onclick = exportTruckTypeReport;
 
 // Warehouse users management (admin)
 document.getElementById('saveUsersBtn').onclick = saveUsersFromModal;
@@ -2643,9 +2673,9 @@ function renderBookingsCard() {
   list.slice(0, 30).forEach(b => {
     const inT = b.checkInTime ? new Date(b.checkInTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
     const outT = b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
-    html += `<tr><td>${b.id}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${b.goodsType||''}</td><td>${b.truckType||''}</td><td>${statusLabel(b.status)}</td></tr>`;
+    html += `<tr><td>${b.id}</td><td>${b.queueNo||''}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${b.goodsType||''}</td><td>${b.truckType||''}</td><td>${statusLabel(b.status)}</td></tr>`;
   });
-  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="10" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="11" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
 
 function renderUtilizationCard() {
@@ -2701,18 +2731,115 @@ function renderSupplierSummaryCard() {
   let map = {};
   list.forEach(b=>{
     let key = (b.supplier||'').trim() || '—';
-    if (!map[key]) map[key] = { supplier: key, total: 0, approved: 0, completed: 0, rejected: 0 };
+    if (!map[key]) map[key] = { supplier: key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
     map[key].total += 1;
+    if (b.status === 'pending') map[key].pending += 1;
     if (b.status === 'approved') map[key].approved += 1;
     if (b.status === 'completed') map[key].completed += 1;
+    if (b.status === 'not_delivered') map[key].not_delivered += 1;
+    if (b.status === 'cancelled') map[key].cancelled += 1;
     if (b.status === 'rejected') map[key].rejected += 1;
   });
   let rows = Object.values(map).sort((a,b)=>b.total-a.total);
   let html = '';
   rows.slice(0, 30).forEach(s => {
-    html += `<tr><td>${s.supplier}</td><td>${s.total}</td><td>${s.approved}</td><td>${s.completed}</td><td>${s.rejected}</td></tr>`;
+    html += `<tr><td>${s.supplier}</td><td>${s.total}</td><td>${s.pending}</td><td>${s.approved}</td><td>${s.completed}</td><td>${s.not_delivered}</td><td>${s.cancelled}</td><td>${s.rejected}</td></tr>`;
   });
-  document.getElementById('rSupPreview').innerHTML = html || `<tr><td colspan="5" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rSupPreview').innerHTML = html || `<tr><td colspan="8" style="color:#999">لا يوجد بيانات</td></tr>`;
+}
+
+function renderGoodsTypeCard() {
+  let whFilter = getReportsWarehouseFilter();
+  let fromStr = document.getElementById('rGoodsFrom').value;
+  let toStr = document.getElementById('rGoodsTo').value;
+  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
+  let map = {};
+  list.forEach(b => {
+    let key = (b.goodsType || '').trim() || '—';
+    if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+    map[key].total += 1;
+    if (b.status === 'pending') map[key].pending += 1;
+    if (b.status === 'approved') map[key].approved += 1;
+    if (b.status === 'completed') map[key].completed += 1;
+    if (b.status === 'not_delivered') map[key].not_delivered += 1;
+    if (b.status === 'cancelled') map[key].cancelled += 1;
+    if (b.status === 'rejected') map[key].rejected += 1;
+  });
+  let rows = Object.values(map).sort((a,b)=>b.total-a.total);
+  let html = '';
+  rows.slice(0, 30).forEach(x => {
+    html += `<tr><td>${x.key}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
+  });
+  document.getElementById('rGoodsPreview').innerHTML = html || `<tr><td colspan="8" style="color:#999">لا يوجد بيانات</td></tr>`;
+}
+
+function exportGoodsTypeReport() {
+  let whFilter = getReportsWarehouseFilter();
+  let fromStr = document.getElementById('rGoodsFrom').value;
+  let toStr = document.getElementById('rGoodsTo').value;
+  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
+  let map = {};
+  list.forEach(b => {
+    let key = (b.goodsType || '').trim() || '—';
+    if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+    map[key].total += 1;
+    if (b.status === 'pending') map[key].pending += 1;
+    if (b.status === 'approved') map[key].approved += 1;
+    if (b.status === 'completed') map[key].completed += 1;
+    if (b.status === 'not_delivered') map[key].not_delivered += 1;
+    if (b.status === 'cancelled') map[key].cancelled += 1;
+    if (b.status === 'rejected') map[key].rejected += 1;
+  });
+  let out = [["نوع البضاعة","إجمالي","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
+  Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>out.push([x.key,x.total,x.pending,x.approved,x.completed,x.not_delivered,x.cancelled,x.rejected]));
+  downloadExcel([{name:'تقرير نوع البضاعة', data: out}], 'تقرير_نوع_البضاعة.xlsx');
+}
+
+function renderTruckTypeCard() {
+  let whFilter = getReportsWarehouseFilter();
+  let fromStr = document.getElementById('rTruckFrom').value;
+  let toStr = document.getElementById('rTruckTo').value;
+  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
+  let map = {};
+  list.forEach(b => {
+    let key = (b.truckType || '').trim() || '—';
+    if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+    map[key].total += 1;
+    if (b.status === 'pending') map[key].pending += 1;
+    if (b.status === 'approved') map[key].approved += 1;
+    if (b.status === 'completed') map[key].completed += 1;
+    if (b.status === 'not_delivered') map[key].not_delivered += 1;
+    if (b.status === 'cancelled') map[key].cancelled += 1;
+    if (b.status === 'rejected') map[key].rejected += 1;
+  });
+  let rows = Object.values(map).sort((a,b)=>b.total-a.total);
+  let html = '';
+  rows.slice(0, 30).forEach(x => {
+    html += `<tr><td>${x.key}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
+  });
+  document.getElementById('rTruckPreview').innerHTML = html || `<tr><td colspan="8" style="color:#999">لا يوجد بيانات</td></tr>`;
+}
+
+function exportTruckTypeReport() {
+  let whFilter = getReportsWarehouseFilter();
+  let fromStr = document.getElementById('rTruckFrom').value;
+  let toStr = document.getElementById('rTruckTo').value;
+  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
+  let map = {};
+  list.forEach(b => {
+    let key = (b.truckType || '').trim() || '—';
+    if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+    map[key].total += 1;
+    if (b.status === 'pending') map[key].pending += 1;
+    if (b.status === 'approved') map[key].approved += 1;
+    if (b.status === 'completed') map[key].completed += 1;
+    if (b.status === 'not_delivered') map[key].not_delivered += 1;
+    if (b.status === 'cancelled') map[key].cancelled += 1;
+    if (b.status === 'rejected') map[key].rejected += 1;
+  });
+  let out = [["نوع العربية","إجمالي","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
+  Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>out.push([x.key,x.total,x.pending,x.approved,x.completed,x.not_delivered,x.cancelled,x.rejected]));
+  downloadExcel([{name:'تقرير نوع العربية', data: out}], 'تقرير_نوع_العربية.xlsx');
 }
 
 function renderBlockedSlotsCard() {
