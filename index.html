@@ -295,7 +295,7 @@ tbody tr:hover td{background:#fafaf8}
     <button class="modal-close" id="closeSignupBtn" type="button" onclick="document.getElementById('signupModal')?.classList.remove('open')">✕</button>
     <h3>📝 إنشاء حساب مورد جديد</h3>
     <div class="form-group"><label>اسم الشركة</label><input type="text" id="signupCompany" placeholder="مثال: شركة النيل للتوريدات"></div>
-    <div class="form-group"><label>اختر المخزن الافتراضي</label><select id="signupWarehouse"><option value="warehouse1">🏭 المخزن الأول</option><option value="warehouse2">🏭 المخزن الثاني</option><option value="warehouse3">🏭 المخزن الثالث</option><option value="warehouse4">🏭 المخزن الرابع</option></select></div>
+    <div class="form-group"><label>اختر المخزن الافتراضي</label><select id="signupWarehouse"><option value="warehouse1">🏭 Talabeya-NSR</option><option value="warehouse2">🏭 Talabeya-GZA</option><option value="warehouse3">🏭 Talabeya-DC</option><option value="warehouse4">🏭 Talabeya-Hub</option></select></div>
     <div class="form-group"><label>اسم المستخدم</label><input type="text" id="signupUsername" placeholder="اختر اسم مستخدم"></div>
     <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="signupEmail" placeholder="example@domain.com"></div>
     <div class="form-group"><label>كلمة المرور</label><input type="password" id="signupPassword" placeholder="أدخل كلمة المرور"></div>
@@ -396,10 +396,10 @@ function closeSignupModal(){
   <div class="warehouse-selector">
     <label>🏭 اختر المخزن:</label>
     <select id="selectedWarehouse">
-      <option value="warehouse1">المخزن الأول</option>
-      <option value="warehouse2">المخزن الثاني</option>
-      <option value="warehouse3">المخزن الثالث</option>
-      <option value="warehouse4">المخزن الرابع</option>
+      <option value="warehouse1">Talabeya-NSR</option>
+      <option value="warehouse2">Talabeya-GZA</option>
+      <option value="warehouse3">Talabeya-DC</option>
+      <option value="warehouse4">Talabeya-Hub</option>
     </select>
   </div>
   
@@ -519,10 +519,10 @@ function closeSignupModal(){
     <label>🏭 اختر المخزن:</label>
     <select id="bookingsWarehouseFilter">
       <option value="">كل المخازن</option>
-      <option value="warehouse1">المخزن الأول</option>
-      <option value="warehouse2">المخزن الثاني</option>
-      <option value="warehouse3">المخزن الثالث</option>
-      <option value="warehouse4">المخزن الرابع</option>
+      <option value="warehouse1">Talabeya-NSR</option>
+      <option value="warehouse2">Talabeya-GZA</option>
+      <option value="warehouse3">Talabeya-DC</option>
+      <option value="warehouse4">Talabeya-Hub</option>
     </select>
   </div>
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -540,10 +540,10 @@ function closeSignupModal(){
     <label>🏭 اختر المخزن:</label>
     <select id="reportsWarehouseFilter">
       <option value="">كل المخازن</option>
-      <option value="warehouse1">المخزن الأول</option>
-      <option value="warehouse2">المخزن الثاني</option>
-      <option value="warehouse3">المخزن الثالث</option>
-      <option value="warehouse4">المخزن الرابع</option>
+      <option value="warehouse1">Talabeya-NSR</option>
+      <option value="warehouse2">Talabeya-GZA</option>
+      <option value="warehouse3">Talabeya-DC</option>
+      <option value="warehouse4">Talabeya-Hub</option>
     </select>
   </div>
   <button class="btn-export-all" id="exportAllBtn" style="margin-bottom:20px">⬇ تحميل كل التقارير في ملف واحد</button>
@@ -1709,9 +1709,9 @@ function trackBooking() {
     <div class="info-row"><span class="info-key">المورد</span><span class="info-val">${foundBooking.supplier}</span></div>
     <div class="info-row"><span class="info-key">الموعد</span><span class="info-val">${formatDate(foundBooking.date)} ${foundBooking.time}</span></div>
     <div class="info-row"><span class="info-key">نوع العربية</span><span class="info-val">${foundBooking.truckType}</span></div>
-    <div class="info-row"><span class="info-key">عدد العربيات</span><span class="info-val">${foundBooking.truckCount}</span></div>
+    <div class="info-row"><span class="info-key">عدد العربيات</span><span class="info-val">${fmtCap(parseFloat(foundBooking.truckCount)||0)}</span></div>
     <div class="info-row"><span class="info-key">الكراتين</span><span class="info-val">${foundBooking.cartons}</span></div>
-    <div class="info-row"><span class="info-key">بالتات</span><span class="info-val">${foundBooking.palletLoading}</span></div>`;
+    `;
 }
 
 // ==================== BOOKINGS TABLE ====================
@@ -1927,10 +1927,10 @@ const WAREHOUSE_USERS_STORAGE_KEY = 'warehouseUsers';
 function defaultWarehouseUsers() {
   return [
     { username: 'admin', password: 'admin123', label: 'الادمن', access: 'all' },
-    { username: 'wh1', password: 'wh1@123', label: 'مسؤول المخزن الأول', access: 'single', warehouseId: 'warehouse1' },
-    { username: 'wh2', password: 'wh2@123', label: 'مسؤول المخزن الثاني', access: 'single', warehouseId: 'warehouse2' },
-    { username: 'wh3', password: 'wh3@123', label: 'مسؤول المخزن الثالث', access: 'single', warehouseId: 'warehouse3' },
-    { username: 'wh4', password: 'wh4@123', label: 'مسؤول المخزن الرابع', access: 'single', warehouseId: 'warehouse4' },
+    { username: 'wh1', password: 'wh1@123', label: 'مسؤول Talabeya-NSR', access: 'single', warehouseId: 'warehouse1' },
+    { username: 'wh2', password: 'wh2@123', label: 'مسؤول Talabeya-GZA', access: 'single', warehouseId: 'warehouse2' },
+    { username: 'wh3', password: 'wh3@123', label: 'مسؤول Talabeya-DC', access: 'single', warehouseId: 'warehouse3' },
+    { username: 'wh4', password: 'wh4@123', label: 'مسؤول Talabeya-Hub', access: 'single', warehouseId: 'warehouse4' },
   ];
 }
 
