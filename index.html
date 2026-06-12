@@ -1867,6 +1867,7 @@ function trackBooking() {
   let id = document.getElementById('trackId').value.trim().toUpperCase();
   let foundBooking = null;
   let foundWhId = null;
+  let grouped = [];
   
   for (let whId in warehouseData) {
     let b = warehouseData[whId].bookings.find(b => b.id === id);
@@ -1876,22 +1877,55 @@ function trackBooking() {
       break;
     }
   }
+
+  // If not found by exact id, try treat input as groupId and collect all split parts
+  if (!foundBooking) {
+    for (let whId in warehouseData) {
+      let parts = (warehouseData[whId]?.bookings || []).filter(b => deriveGroupKey(b) === id);
+      if (parts.length) {
+        grouped = parts.map(p => ({ ...p, warehouseId: whId }));
+        // pick first as representative
+        foundBooking = parts[0];
+        foundWhId = whId;
+        break;
+      }
+    }
+  }
   
   let res = document.getElementById('trackResult');
   if (!foundBooking) { res.innerHTML = '<div class="alert alert-error show">رقم الحجز غير موجود</div>'; return; }
+
+  // If booking is part of a group, load all parts for display
+  if (!grouped.length) {
+    let gkey = deriveGroupKey(foundBooking);
+    grouped = (warehouseData[foundWhId]?.bookings || [])
+      .filter(b => deriveGroupKey(b) === gkey)
+      .map(p => ({ ...p, warehouseId: foundWhId }));
+  }
+  grouped.sort((a,b)=>String(a.time||'').localeCompare(String(b.time||'')));
   
   let color = {approved:'green',completed:'blue'}[foundBooking.status] || 'green';
   let label = {approved:'مؤكد',completed:'مكتمل'}[foundBooking.status] || 'مؤكد';
   let warehouseName = WAREHOUSES[foundWhId]?.name || foundWhId;
   
-  res.innerHTML = `<div style="display:flex;justify-content:space-between;margin-bottom:14px"><span>${foundBooking.id}</span><span class="badge badge-${color}">${label}</span></div>
-    <div class="info-row"><span class="info-key">رقم الدور</span><span class="info-val">${foundBooking.queueNo || '-'}</span></div>
+  const groupKey = deriveGroupKey(foundBooking);
+  const totalTrucks = grouped.reduce((s,p)=>s+(parseFloat(p.truckCount)||0),0);
+  const totalCartons = grouped.reduce((s,p)=>s+(parseInt(p.cartons)||0),0);
+  const partsHtml = grouped.length > 1 ? `
+    <div class="info-row"><span class="info-key">رقم الجروب</span><span class="info-val">${groupKey}</span></div>
+    <div class="info-row"><span class="info-key">أجزاء الحجز</span><span class="info-val">${grouped.map(p=>p.id).join(' , ')}</span></div>
+  ` : '';
+
+  res.innerHTML = `<div style="display:flex;justify-content:space-between;margin-bottom:14px"><span>${groupKey}</span><span class="badge badge-${color}">${label}</span></div>
+    ${partsHtml}
     <div class="info-row"><span class="info-key">المخزن</span><span class="info-val">${warehouseName}</span></div>
     <div class="info-row"><span class="info-key">المورد</span><span class="info-val">${foundBooking.supplier}</span></div>
-    <div class="info-row"><span class="info-key">الموعد</span><span class="info-val">${formatDate(foundBooking.date)} ${foundBooking.time}</span></div>
+    <div class="info-row"><span class="info-key">التاريخ</span><span class="info-val">${formatDate(foundBooking.date)}</span></div>
+    <div class="info-row"><span class="info-key">المواعيد</span><span class="info-val">${grouped.map(p=>p.time).join(' , ')}</span></div>
     <div class="info-row"><span class="info-key">نوع العربية</span><span class="info-val">${foundBooking.truckType}</span></div>
-    <div class="info-row"><span class="info-key">عدد العربيات</span><span class="info-val">${fmtCap(parseFloat(foundBooking.truckCount)||0)}</span></div>
-    <div class="info-row"><span class="info-key">الكراتين</span><span class="info-val">${foundBooking.cartons}</span></div>
+    <div class="info-row"><span class="info-key">نوع البضاعة</span><span class="info-val">${foundBooking.goodsType}</span></div>
+    <div class="info-row"><span class="info-key">إجمالي العربيات</span><span class="info-val">${fmtCap(totalTrucks)}</span></div>
+    <div class="info-row"><span class="info-key">إجمالي الكراتين</span><span class="info-val">${totalCartons}</span></div>
     `;
 }
 
