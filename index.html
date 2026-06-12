@@ -552,6 +552,10 @@ function closeSignupModal(){
       <option value="warehouse4">Talabeya-Hub</option>
     </select>
   </div>
+  <div class="report-filters" style="margin-bottom:16px">
+    <input type="date" class="date-input" id="rFrom">
+    <input type="date" class="date-input" id="rTo">
+  </div>
   <button class="btn-export-all" id="exportAllBtn" style="margin-bottom:20px">⬇ تحميل كل التقارير في ملف واحد</button>
 
   <div class="reports-grid">
@@ -590,8 +594,6 @@ function closeSignupModal(){
         </div>
       </div>
       <div class="report-filters">
-        <input type="date" class="date-input" id="rBookingsFrom">
-        <input type="date" class="date-input" id="rBookingsTo">
         <select class="date-input" id="rBookingsStatus">
           <option value="">كل الحالات</option>
           <option value="pending">معلق</option>
@@ -627,10 +629,7 @@ function closeSignupModal(){
           <div class="report-card-sub">ملخص حسب نوع البضاعة خلال فترة</div>
         </div>
       </div>
-      <div class="report-filters">
-        <input type="date" class="date-input" id="rGoodsFrom">
-        <input type="date" class="date-input" id="rGoodsTo">
-      </div>
+      <div class="report-filters"></div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
           <thead><tr><th>نوع البضاعة</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
@@ -648,10 +647,7 @@ function closeSignupModal(){
           <div class="report-card-sub">ملخص حسب المورد خلال فترة</div>
         </div>
       </div>
-      <div class="report-filters">
-        <input type="date" class="date-input" id="rSupFrom">
-        <input type="date" class="date-input" id="rSupTo">
-      </div>
+      <div class="report-filters"></div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
           <thead><tr><th>المورد</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
@@ -669,10 +665,7 @@ function closeSignupModal(){
           <div class="report-card-sub">ملخص حسب نوع العربية خلال فترة</div>
         </div>
       </div>
-      <div class="report-filters">
-        <input type="date" class="date-input" id="rTruckFrom">
-        <input type="date" class="date-input" id="rTruckTo">
-      </div>
+      <div class="report-filters"></div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
           <thead><tr><th>نوع العربية</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
@@ -1430,7 +1423,10 @@ function renderWarehouse() {
       bookingsInSlot.slice(0, 2).forEach(b => {
         let t = parseFloat(b.truckCount) || 0;
         let q = (b.queueNo !== undefined && b.queueNo !== null && b.queueNo !== '') ? b.queueNo : '-';
-        info += `#${q} · ${b.supplier.substring(0, 12)} (${fmtCap(t)} عربية)<br>`;
+        let supplierShort = (b.supplier || '').substring(0, 12);
+        let truckShort = (b.truckType || '').substring(0, 10);
+        let goodsShort = (b.goodsType || '').substring(0, 12);
+        info += `#${q} · ${supplierShort} — ${truckShort} — ${goodsShort} (${fmtCap(t)} عربية)<br>`;
       });
       if (bookingsInSlot.length > 2) info += `+${bookingsInSlot.length-2} آخرين`;
       info += `</div>`;
@@ -1926,6 +1922,10 @@ function renderBookingsTable() {
     const idStr = String(b.id||'').trim();
     const parts = idStr.split('-').filter(Boolean);
     const isSplit = (parts.length >= 3 && /^\d+$/.test(parts[parts.length-1]));
+    const isFinal = (b.status === 'completed' || b.status === 'cancelled' || b.status === 'not_delivered');
+    const lockFinal = (currentWarehouseAccess !== 'all' && isFinal);
+    const disAttr = lockFinal ? 'disabled' : '';
+    const disStyle = lockFinal ? 'style="opacity:.45;cursor:not-allowed"' : '';
     return `<tr class="${isSplit ? 'split-line' : ''}">
     <td><strong>${b.id}</strong>${isSplit ? `<span class=\"split-pill\">Split</span>` : ''}</td>
     <td>${groupKey || '-'}</td>
@@ -1948,9 +1948,9 @@ function renderBookingsTable() {
       <button class="btn-sm btn-details" onclick="openBookingModal('${b.warehouseId}','${b.id}')">تفاصيل</button>
       <button class="btn-sm btn-details" onclick="checkInBooking('${b.warehouseId}','${b.id}')">دخول</button>
       <button class="btn-sm btn-details" onclick="checkOutBooking('${b.warehouseId}','${b.id}')">خروج</button>
-      <button class="btn-sm btn-cancel" onclick="markNotDelivered('${b.warehouseId}','${b.id}')">لم يتم التسليم</button>
-      <button class="btn-sm btn-complete" onclick="completeBooking('${b.warehouseId}','${b.id}')">مكتمل</button>
-      <button class="btn-sm btn-cancel" onclick="cancelBooking('${b.warehouseId}','${b.id}')">إلغاء</button>
+      <button class="btn-sm btn-cancel" ${disAttr} ${disStyle} onclick="markNotDelivered('${b.warehouseId}','${b.id}')">لم يتم التسليم</button>
+      <button class="btn-sm btn-complete" ${disAttr} ${disStyle} onclick="completeBooking('${b.warehouseId}','${b.id}')">مكتمل</button>
+      <button class="btn-sm btn-cancel" ${disAttr} ${disStyle} onclick="cancelBooking('${b.warehouseId}','${b.id}')">إلغاء</button>
     </div>
   </td></tr>`;
   }).join('');
@@ -2590,15 +2590,9 @@ document.getElementById('reportsWarehouseFilter').onchange = () => { refreshRepo
 
 // Reports dashboard listeners
 document.getElementById('rDailyDate').onchange = refreshReportsDashboard;
-document.getElementById('rBookingsFrom').onchange = refreshReportsDashboard;
-document.getElementById('rBookingsTo').onchange = refreshReportsDashboard;
 document.getElementById('rBookingsStatus').onchange = refreshReportsDashboard;
-document.getElementById('rGoodsFrom').onchange = refreshReportsDashboard;
-document.getElementById('rGoodsTo').onchange = refreshReportsDashboard;
-document.getElementById('rSupFrom').onchange = refreshReportsDashboard;
-document.getElementById('rSupTo').onchange = refreshReportsDashboard;
-document.getElementById('rTruckFrom').onchange = refreshReportsDashboard;
-document.getElementById('rTruckTo').onchange = refreshReportsDashboard;
+document.getElementById('rFrom').onchange = refreshReportsDashboard;
+document.getElementById('rTo').onchange = refreshReportsDashboard;
 
 document.getElementById('exportDailyBtn').onclick = exportDailySchedule;
 document.getElementById('exportBookingsBtn').onclick = exportBookingsReport;
@@ -2621,14 +2615,8 @@ document.getElementById('doSignupBtn').onclick = doSignup;
 function initReportsDefaults() {
   // set default dates once
   if (!document.getElementById('rDailyDate').value) document.getElementById('rDailyDate').value = today();
-  if (!document.getElementById('rBookingsFrom').value) document.getElementById('rBookingsFrom').value = today();
-  if (!document.getElementById('rBookingsTo').value) document.getElementById('rBookingsTo').value = today();
-  if (!document.getElementById('rGoodsFrom').value) document.getElementById('rGoodsFrom').value = today();
-  if (!document.getElementById('rGoodsTo').value) document.getElementById('rGoodsTo').value = today();
-  if (!document.getElementById('rSupFrom').value) document.getElementById('rSupFrom').value = today();
-  if (!document.getElementById('rSupTo').value) document.getElementById('rSupTo').value = today();
-  if (!document.getElementById('rTruckFrom').value) document.getElementById('rTruckFrom').value = today();
-  if (!document.getElementById('rTruckTo').value) document.getElementById('rTruckTo').value = today();
+  if (!document.getElementById('rFrom').value) document.getElementById('rFrom').value = today();
+  if (!document.getElementById('rTo').value) document.getElementById('rTo').value = today();
 }
 
 function refreshReportsDashboard() {
@@ -2711,8 +2699,8 @@ function renderDailyScheduleCard() {
 
 function renderBookingsCard() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rBookingsFrom').value;
-  let toStr = document.getElementById('rBookingsTo').value;
+  let fromStr = document.getElementById('rFrom').value;
+  let toStr = document.getElementById('rTo').value;
   let status = document.getElementById('rBookingsStatus').value;
 
   let list = getAllBookings(whFilter);
@@ -2788,8 +2776,8 @@ function renderUtilizationCard() {
 
 function renderSupplierSummaryCard() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rSupFrom').value;
-  let toStr = document.getElementById('rSupTo').value;
+  let fromStr = document.getElementById('rFrom').value;
+  let toStr = document.getElementById('rTo').value;
   let list = getAllBookings(whFilter);
   list = filterBookingsByRange(list, fromStr, toStr, '');
   let map = {};
@@ -2815,8 +2803,8 @@ function renderSupplierSummaryCard() {
 
 function renderGoodsTypeCard() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rGoodsFrom').value;
-  let toStr = document.getElementById('rGoodsTo').value;
+  let fromStr = document.getElementById('rFrom').value;
+  let toStr = document.getElementById('rTo').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
   let map = {};
   list.forEach(b => {
@@ -2841,8 +2829,8 @@ function renderGoodsTypeCard() {
 
 function exportGoodsTypeReport() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rGoodsFrom').value;
-  let toStr = document.getElementById('rGoodsTo').value;
+  let fromStr = document.getElementById('rFrom').value;
+  let toStr = document.getElementById('rTo').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
   let map = {};
   list.forEach(b => {
@@ -2866,8 +2854,8 @@ function exportGoodsTypeReport() {
 
 function renderTruckTypeCard() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rTruckFrom').value;
-  let toStr = document.getElementById('rTruckTo').value;
+  let fromStr = document.getElementById('rFrom').value;
+  let toStr = document.getElementById('rTo').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
   let map = {};
   list.forEach(b => {
@@ -2892,8 +2880,8 @@ function renderTruckTypeCard() {
 
 function exportTruckTypeReport() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rTruckFrom').value;
-  let toStr = document.getElementById('rTruckTo').value;
+  let fromStr = document.getElementById('rFrom').value;
+  let toStr = document.getElementById('rTo').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
   let map = {};
   list.forEach(b => {
@@ -2958,8 +2946,8 @@ function exportDailySchedule() {
 
 function exportBookingsReport() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rBookingsFrom').value;
-  let toStr = document.getElementById('rBookingsTo').value;
+  let fromStr = document.getElementById('rFrom').value;
+  let toStr = document.getElementById('rTo').value;
   let status = document.getElementById('rBookingsStatus').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, status);
   let rows = [["رقم الحجز","المخزن","التاريخ","الوقت","وقت الدخول","وقت الخروج","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","الحالة"]];
@@ -2983,8 +2971,8 @@ function exportBookingsReport() {
 
 function exportSlotsUtilization() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rUtilFrom').value;
-  let toStr = document.getElementById('rUtilTo').value;
+  let fromStr = document.getElementById('rFrom')?.value;
+  let toStr = document.getElementById('rTo')?.value;
   if (!fromStr || !toStr) return;
   if (fromStr > toStr) { let t = fromStr; fromStr = toStr; toStr = t; }
   let whIds = whFilter ? [whFilter] : Object.keys(WAREHOUSES);
@@ -3015,8 +3003,8 @@ function exportSlotsUtilization() {
 
 function exportSupplierSummary() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rSupFrom').value;
-  let toStr = document.getElementById('rSupTo').value;
+  let fromStr = document.getElementById('rFrom').value;
+  let toStr = document.getElementById('rTo').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
   let map = {};
   list.forEach(b=>{
@@ -3034,8 +3022,8 @@ function exportSupplierSummary() {
 
 function exportBlockedSlots() {
   let whFilter = getReportsWarehouseFilter();
-  let fromStr = document.getElementById('rBlockedFrom').value;
-  let toStr = document.getElementById('rBlockedTo').value;
+  let fromStr = document.getElementById('rFrom')?.value;
+  let toStr = document.getElementById('rTo')?.value;
   let list = getAllBlockedSlots(whFilter).filter(x=>{
     if (fromStr && x.date < fromStr) return false;
     if (toStr && x.date > toStr) return false;
