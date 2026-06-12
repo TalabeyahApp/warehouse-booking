@@ -390,7 +390,7 @@ function closeSignupModal(){
 <div class="page" id="page-warehouse">
   <div class="page-head">
     <h1>لوحة تحكم المخازن</h1>
-    <p>إدارة الـ slots لجميع المخازن - الحد الأقصى 5 عربيات لكل موعد</p>
+    <p></p>
   </div>
   
   <div class="warehouse-selector">
@@ -420,7 +420,7 @@ function closeSignupModal(){
 <div class="page" id="page-supplier">
   <div class="page-head">
     <h1>بوابة المورد</h1>
-    <p>احجز موعد استلام (من 9 صباحاً إلى 4 مساءً - الحد الأقصى 5 عربيات لكل موعد)</p>
+    <p></p>
   </div>
 
   <div class="report-card" style="margin-bottom:16px">
@@ -591,6 +591,7 @@ function closeSignupModal(){
           <option value="pending">معلق</option>
           <option value="approved">مؤكد</option>
           <option value="completed">مكتمل</option>
+          <option value="not_delivered">لم يتم التسليم</option>
           <option value="rejected">مرفوض</option>
         </select>
       </div>
@@ -1177,7 +1178,18 @@ function isBlocked(whId, date, time) {
   if (!ds || !Array.isArray(ds.blockedSlots)) return false;
   // Auto-close all slots on Friday
   if (isFriday(date)) return true;
+  // If the day has no activity at all, treat all slots as closed
+  if (isNoActivityDay(whId, date)) return true;
   return ds.blockedSlots.includes(getSlotKey(date, time));
+}
+
+function isNoActivityDay(whId, dateStr) {
+  if (!whId || !dateStr) return false;
+  const ds = warehouseData[whId];
+  if (!ds) return false;
+  const hasBooking = (ds.bookings || []).some(b => b.date === dateStr);
+  const hasManualBlock = (ds.blockedSlots || []).some(k => k.startsWith(dateStr + '|'));
+  return !hasBooking && !hasManualBlock;
 }
 
 function isFriday(dateStr) {
@@ -2747,6 +2759,7 @@ function statusLabel(s) {
   if (s === 'completed') return 'مكتمل';
   if (s === 'pending') return 'معلق';
   if (s === 'rejected') return 'مرفوض';
+  if (s === 'not_delivered') return 'لم يتم التسليم';
   return s || '';
 }
 
