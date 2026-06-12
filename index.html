@@ -1570,7 +1570,7 @@ function renderSupplierSlots() {
   grid.innerHTML = SLOTS_PER_DAY.map(time => {
     let st = slotStatus(whId, date, time);
     let bookedCount = getSlotBookedCount(whId, date, time);
-    let available = slotCapacity(time) - bookedCount;
+    let available = slotCapacity(whId, date, time) - bookedCount;
     let taken = (st === 'blocked' || st === 'full' || st === 'past');
     let cap = '';
     let extraClass = '';
@@ -1597,7 +1597,7 @@ function renderSupplierSlots() {
     return `<div class="slot-pick ${taken?'taken':''} ${extraClass}" data-time="${time}" ${onclickAttr}>
       <div class="sp-time">${time}</div>
       <div class="sp-cap">${cap}</div>
-      <div class="sp-capacity ${extraClass}">🚛 سعة ${slotCapacity(time)}</div>
+      <div class="sp-capacity ${extraClass}">🚛 سعة ${slotCapacity(whId, date, time)}</div>
     </div>`;
   }).join('');
 }
