@@ -602,7 +602,7 @@ function closeSignupModal(){
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>رقم الحجز</th><th>التاريخ</th><th>الوقت</th><th>المورد</th><th>الحالة</th></tr></thead>
+          <thead><tr><th>رقم الحجز</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>دخول</th><th>خروج</th><th>المورد</th><th>الحالة</th></tr></thead>
           <tbody id="rBookingsPreview"></tbody>
         </table>
       </div>
@@ -1321,9 +1321,22 @@ function renderWarehouse() {
   let availableCapacity = totalCapacity - usedUnits - blockedCapacity;
   if (availableCapacity < 0) availableCapacity = 0;
 
+  // Slot KPIs: completed slots (full) and remaining slots (available)
+  let completedSlots = 0;
+  let remainingSlots = 0;
+  SLOTS_PER_DAY.forEach(time => {
+    if (isBlocked(whId, date, time) || isPastSlot(date, time)) return;
+    let used = getSlotBookedCount(whId, date, time);
+    let cap = slotCapacity(time);
+    if (used >= cap && cap > 0) completedSlots += 1;
+    else remainingSlots += 1;
+  });
+
   document.getElementById('whStats').innerHTML = `
     <div class="stat-card"><div class="stat-label">السعة المتاحة</div><div class="stat-val green">${fmtCap(availableCapacity)}</div><div style="font-size:10px">من ${fmtCap(totalCapacity)} عربية</div></div>
     <div class="stat-card"><div class="stat-label">عربيات محجوزة</div><div class="stat-val accent">${fmtCap(bookedTrucks)}</div></div>
+    <div class="stat-card"><div class="stat-label">Slots مكتملة</div><div class="stat-val">${completedSlots}</div></div>
+    <div class="stat-card"><div class="stat-label">Slots متبقية</div><div class="stat-val">${remainingSlots}</div></div>
     <div class="stat-card"><div class="stat-label">Slots مغلقة</div><div class="stat-val">${blocked}</div></div>
     <div class="stat-card"><div class="stat-label">إجمالي الحجوزات</div><div class="stat-val">${dayBookings.length}</div></div>
   `;
@@ -2524,9 +2537,11 @@ function renderBookingsCard() {
 
   let html = '';
   list.slice(0, 30).forEach(b => {
-    html += `<tr><td>${b.id}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${b.supplier||''}</td><td>${statusLabel(b.status)}</td></tr>`;
+    const inT = b.checkInTime ? new Date(b.checkInTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
+    const outT = b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
+    html += `<tr><td>${b.id}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${statusLabel(b.status)}</td></tr>`;
   });
-  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="5" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="8" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
 
 function renderUtilizationCard() {
@@ -2643,8 +2658,22 @@ function exportBookingsReport() {
   let toStr = document.getElementById('rBookingsTo').value;
   let status = document.getElementById('rBookingsStatus').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, status);
-  let rows = [["رقم الحجز","المخزن","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","بالتات","التاريخ","الوقت","الحالة"]];
-  list.forEach(b=>rows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', b.truckCount||'', b.cartons||'', b.palletLoading||'', formatDate(b.date), b.time, statusLabel(b.status)]));
+  let rows = [["رقم الحجز","المخزن","التاريخ","الوقت","وقت الدخول","وقت الخروج","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","الحالة"]];
+  list.forEach(b=>rows.push([
+    b.id,
+    b.warehouseName,
+    formatDate(b.date),
+    b.time,
+    b.checkInTime ? new Date(b.checkInTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '',
+    b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '',
+    b.supplier,
+    b.orderNum,
+    b.goodsType,
+    b.truckType||'',
+    b.truckCount||'',
+    b.cartons||'',
+    statusLabel(b.status)
+  ]));
   downloadExcel([{name:'كل الحجوزات', data: rows}], 'كل_الحجوزات.xlsx');
 }
 
