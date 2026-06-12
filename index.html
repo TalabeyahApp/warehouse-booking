@@ -1116,6 +1116,15 @@ function slotLetter(slotTime) {
   return String.fromCharCode(65 + idx); // 65='A'
 }
 
+function deriveGroupKey(b) {
+  // Prefer explicit groupId; fallback to base id before split suffix (e.g. "ABC-123-1" -> "ABC-123")
+  const gid = String((b && b.groupId) || '').trim();
+  if (gid) return gid;
+  const id = String((b && b.id) || '').trim();
+  const m = id.match(/^(.*)-\d+$/);
+  return m ? m[1] : id;
+}
+
 function genId() { return 'HYG-' + Math.random().toString(36).substr(2,4).toUpperCase(); }
 
 // Booking ID: first 3 chars from warehouse code, rest numbers
@@ -1489,9 +1498,9 @@ function cancelBooking(whId, id) {
   if(confirm('هل أنت متأكد من إلغاء هذا الحجز؟')){ 
     let b = warehouseData[whId].bookings.find(b=>b.id===id);
     if(b){
-      let gid = (b.groupId || b.id || '').trim();
+      let gid = deriveGroupKey(b);
       (warehouseData[whId]?.bookings || []).forEach(x => {
-        if ((x.groupId || x.id || '').trim() === gid) {
+        if (deriveGroupKey(x) === gid) {
           x.status = 'cancelled';
           x.cancelledAt = new Date().toISOString();
           upsertBookingToApi(whId, x);
@@ -1508,9 +1517,9 @@ function cancelBooking(whId, id) {
 function completeBooking(whId, id) { 
   let b = warehouseData[whId].bookings.find(b=>b.id===id); 
   if(!b) return;
-  let gid = (b.groupId || b.id || '').trim();
+  let gid = deriveGroupKey(b);
   (warehouseData[whId]?.bookings || []).forEach(x => {
-    if ((x.groupId || x.id || '').trim() === gid) {
+    if (deriveGroupKey(x) === gid) {
       x.status = 'completed';
       upsertBookingToApi(whId, x);
     }
@@ -1921,9 +1930,9 @@ function renderBookingsTable() {
 function markNotDelivered(whId, id) {
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
-  let gid = (b.groupId || b.id || '').trim();
+  let gid = deriveGroupKey(b);
   (warehouseData[whId]?.bookings || []).forEach(x => {
-    if ((x.groupId || x.id || '').trim() === gid) {
+    if (deriveGroupKey(x) === gid) {
       x.status = 'not_delivered';
       upsertBookingToApi(whId, x);
     }
@@ -1952,9 +1961,9 @@ function checkOutBooking(whId, id) {
   }
   if (!b.checkOutTime) b.checkOutTime = new Date().toISOString();
   // Auto-complete on checkout
-  let gid = (b.groupId || b.id || '').trim();
+  let gid = deriveGroupKey(b);
   (warehouseData[whId]?.bookings || []).forEach(x => {
-    if ((x.groupId || x.id || '').trim() === gid) {
+    if (deriveGroupKey(x) === gid) {
       if (!x.checkOutTime) x.checkOutTime = b.checkOutTime;
       x.status = 'completed';
       upsertBookingToApi(whId, x);
