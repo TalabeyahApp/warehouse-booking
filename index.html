@@ -2544,6 +2544,8 @@ function applyWarehouseLogin(match) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-warehouse').classList.add('active');
   document.getElementById('whDate').value = today();
+  // Default bookings filter date to today
+  try { document.getElementById('filterDate').value = today(); } catch(e) {}
 
   // Restrict warehouse selection for non-admin users
   if (currentWarehouseAccess === 'single' && match.warehouseId) {
@@ -2712,7 +2714,9 @@ document.getElementById('filterStatus').onchange = renderBookingsTable;
 document.getElementById('filterDate').onchange = renderBookingsTable;
 document.getElementById('filterSearch').oninput = renderBookingsTable;
 document.getElementById('supDate').onchange = () => { refreshDataWithLoader().then(() => { renderSupplierSlots(); checkCapacity(); }); };
-document.getElementById('myBookingsDate').onchange = renderMyBookings;
+document.getElementById('myBookingsDate').onchange = () => {
+  refreshDataWithLoader().then(() => renderMyBookings());
+};
 document.getElementById('supTruckCount').oninput = checkCapacity;
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
 document.getElementById('exportAllBtn').onclick = exportAllSheets;
