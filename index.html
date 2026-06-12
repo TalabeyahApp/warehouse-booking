@@ -627,7 +627,7 @@ function closeSignupModal(){
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>نوع البضاعة</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
+          <thead><tr><th>نوع البضاعة</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
           <tbody id="rGoodsPreview"></tbody>
         </table>
       </div>
@@ -648,7 +648,7 @@ function closeSignupModal(){
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>المورد</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
+          <thead><tr><th>المورد</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
           <tbody id="rSupPreview"></tbody>
         </table>
       </div>
@@ -669,7 +669,7 @@ function closeSignupModal(){
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>نوع العربية</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
+          <thead><tr><th>نوع العربية</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
           <tbody id="rTruckPreview"></tbody>
         </table>
       </div>
@@ -1123,6 +1123,18 @@ function deriveGroupKey(b) {
   const id = String((b && b.id) || '').trim();
   const m = id.match(/^(.*)-\d+$/);
   return m ? m[1] : id;
+}
+
+function countUniqueTrucks(bookings, getBucketKey) {
+  // Count trucks as "one per groupId" (split across slots counts as 1 truck)
+  const seen = new Set();
+  (bookings || []).forEach(b => {
+    const bucket = String(getBucketKey(b) || '—').trim() || '—';
+    const g = deriveGroupKey(b);
+    if (!g) return;
+    seen.add(bucket + '||' + g);
+  });
+  return seen.size;
 }
 
 function genId() { return 'HYG-' + Math.random().toString(36).substr(2,4).toUpperCase(); }
@@ -2778,9 +2790,10 @@ function renderSupplierSummaryCard() {
   let rows = Object.values(map).sort((a,b)=>b.total-a.total);
   let html = '';
   rows.slice(0, 30).forEach(s => {
-    html += `<tr><td>${s.supplier}</td><td>${s.total}</td><td>${s.pending}</td><td>${s.approved}</td><td>${s.completed}</td><td>${s.not_delivered}</td><td>${s.cancelled}</td><td>${s.rejected}</td></tr>`;
+    const truckTotal = countUniqueTrucks(list.filter(b => ((b.supplier||'').trim()||'—') === s.supplier), b => (b.supplier||'').trim()||'—');
+    html += `<tr><td>${s.supplier}</td><td>${truckTotal}</td><td>${s.total}</td><td>${s.pending}</td><td>${s.approved}</td><td>${s.completed}</td><td>${s.not_delivered}</td><td>${s.cancelled}</td><td>${s.rejected}</td></tr>`;
   });
-  document.getElementById('rSupPreview').innerHTML = html || `<tr><td colspan="8" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rSupPreview').innerHTML = html || `<tr><td colspan="9" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
 
 function renderGoodsTypeCard() {
@@ -2803,9 +2816,10 @@ function renderGoodsTypeCard() {
   let rows = Object.values(map).sort((a,b)=>b.total-a.total);
   let html = '';
   rows.slice(0, 30).forEach(x => {
-    html += `<tr><td>${x.key}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
+    const truckTotal = countUniqueTrucks(list.filter(b => ((b.goodsType||'').trim()||'—') === x.key), b => (b.goodsType||'').trim()||'—');
+    html += `<tr><td>${x.key}</td><td>${truckTotal}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
   });
-  document.getElementById('rGoodsPreview').innerHTML = html || `<tr><td colspan="8" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rGoodsPreview').innerHTML = html || `<tr><td colspan="9" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
 
 function exportGoodsTypeReport() {
@@ -2825,8 +2839,11 @@ function exportGoodsTypeReport() {
     if (b.status === 'cancelled') map[key].cancelled += 1;
     if (b.status === 'rejected') map[key].rejected += 1;
   });
-  let out = [["نوع البضاعة","إجمالي","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
-  Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>out.push([x.key,x.total,x.pending,x.approved,x.completed,x.not_delivered,x.cancelled,x.rejected]));
+  let out = [["نوع البضاعة","عدد العربيات","إجمالي","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
+  Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>{
+    const truckTotal = countUniqueTrucks(list.filter(b => ((b.goodsType||'').trim()||'—') === x.key), b => (b.goodsType||'').trim()||'—');
+    out.push([x.key, truckTotal, x.total, x.pending, x.approved, x.completed, x.not_delivered, x.cancelled, x.rejected]);
+  });
   downloadExcel([{name:'تقرير نوع البضاعة', data: out}], 'تقرير_نوع_البضاعة.xlsx');
 }
 
@@ -2850,9 +2867,10 @@ function renderTruckTypeCard() {
   let rows = Object.values(map).sort((a,b)=>b.total-a.total);
   let html = '';
   rows.slice(0, 30).forEach(x => {
-    html += `<tr><td>${x.key}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
+    const truckTotal = countUniqueTrucks(list.filter(b => ((b.truckType||'').trim()||'—') === x.key), b => (b.truckType||'').trim()||'—');
+    html += `<tr><td>${x.key}</td><td>${truckTotal}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
   });
-  document.getElementById('rTruckPreview').innerHTML = html || `<tr><td colspan="8" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rTruckPreview').innerHTML = html || `<tr><td colspan="9" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
 
 function exportTruckTypeReport() {
@@ -2872,8 +2890,11 @@ function exportTruckTypeReport() {
     if (b.status === 'cancelled') map[key].cancelled += 1;
     if (b.status === 'rejected') map[key].rejected += 1;
   });
-  let out = [["نوع العربية","إجمالي","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
-  Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>out.push([x.key,x.total,x.pending,x.approved,x.completed,x.not_delivered,x.cancelled,x.rejected]));
+  let out = [["نوع العربية","عدد العربيات","إجمالي","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
+  Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>{
+    const truckTotal = countUniqueTrucks(list.filter(b => ((b.truckType||'').trim()||'—') === x.key), b => (b.truckType||'').trim()||'—');
+    out.push([x.key, truckTotal, x.total, x.pending, x.approved, x.completed, x.not_delivered, x.cancelled, x.rejected]);
+  });
   downloadExcel([{name:'تقرير نوع العربية', data: out}], 'تقرير_نوع_العربية.xlsx');
 }
 
