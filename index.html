@@ -1035,11 +1035,18 @@ function hideLoader() {
   } catch(e) {}
 }
 
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
+
 async function refreshDataWithLoader() {
   try {
     showLoader('جاري التحميل...');
     dataLoadPromise = null;
-    await ensureDataLoaded();
+    await withTimeout(ensureDataLoaded(), 12000);
   } finally {
     hideLoader();
   }
