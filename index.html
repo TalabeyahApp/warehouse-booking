@@ -587,7 +587,7 @@ function closeSignupModal(){
     <input type="date" class="date-input" id="filterDate">
     <input type="text" class="date-input" id="filterSearch" placeholder="بحث..." style="flex:1">
   </div>
-  <div class="table-wrap"><table id="bookingsTable"><thead><tr><th>رقم الحجز</th><th>رقم الجروب</th><th>رقم الدور</th><th>المخزن</th><th>المورد</th><th>رقم الأوردر</th><th>التاريخ</th><th>الوقت</th><th>نوع البضاعة</th><th>العربية</th><th>عدد العربيات</th><th>الكراتين</th><th>بالتات</th><th>السيارة/السائق</th><th>وقت الدخول</th><th>وقت الخروج</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="bookingsTbody"></tbody></table></div>
+  <div class="table-wrap"><table id="bookingsTable"><thead><tr><th>رقم الحجز</th><th>رقم الجروب</th><th>رقم الدور</th><th>المخزن</th><th>المورد</th><th>رقم الأوردر</th><th>التاريخ</th><th>الوقت</th><th>نوع البضاعة</th><th>العربية</th><th>عدد العربيات</th><th>الكراتين</th><th>السيارة/السائق</th><th>وقت الدخول</th><th>وقت الخروج</th><th>الحالة</th><th>تاريخ الحالة</th><th>إجراء</th></tr></thead><tbody id="bookingsTbody"></tbody></table></div>
 </div>
 
 <!-- REPORTS PAGE -->
@@ -981,6 +981,8 @@ async function loadWarehouseDataFromApi() {
         date: normalizeDate(b.date),
         time: normalizeTime(b.time),
         status: b.status || 'approved',
+        statusUpdatedAt: b.statusUpdatedAt || b.statusupdatedat || '',
+        adminUnlocked: (String(b.adminUnlocked || b.adminunlocked || '').toLowerCase() === 'true') || (b.adminUnlocked === true) || (b.adminunlocked === true),
         notes: b.notes || '',
         createdAt: b.createdAt || '',
         checkInTime: b.checkInTime || '',
@@ -1106,6 +1108,8 @@ async function upsertBookingToApi(whId, booking) {
       date: sheetDate,
       time: sheetTime,
       status: booking.status || '',
+      statusUpdatedAt: booking.statusUpdatedAt || '',
+      adminUnlocked: booking.adminUnlocked ? true : false,
       createdAt: booking.createdAt || '',
       checkInTime: booking.checkInTime || '',
       checkOutTime: booking.checkOutTime || '',
@@ -1254,8 +1258,8 @@ function exportAllSheets() {
   let whFilter = document.getElementById('reportsWarehouseFilter')?.value || '';
   // Bookings
   let bookingsList = getAllBookings(whFilter);
-  let bookingsRows = [["رقم الحجز","المخزن","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","بالتات","التاريخ","الوقت","الحالة"]];
-  bookingsList.forEach(b=>bookingsRows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', b.truckCount||'', b.cartons||'', b.palletLoading||'', formatDate(b.date), b.time, statusLabel(b.status)]));
+  let bookingsRows = [["رقم الحجز","المخزن","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","التاريخ","الوقت","الحالة"]];
+  bookingsList.forEach(b=>bookingsRows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', b.truckCount||'', b.cartons||'', formatDate(b.date), b.time, statusLabel(b.status)]));
 
   // Supplier summary
   let supSummary = buildSupplierSummary(bookingsList);
@@ -1601,6 +1605,7 @@ function cancelBooking(whId, id) {
       (warehouseData[whId]?.bookings || []).forEach(x => {
         if (deriveGroupKey(x) === gid) {
           x.status = 'cancelled';
+          x.statusUpdatedAt = new Date().toISOString();
           x.cancelledAt = new Date().toISOString();
           upsertBookingToApi(whId, x);
         }
@@ -1616,10 +1621,18 @@ function cancelBooking(whId, id) {
 function completeBooking(whId, id) { 
   let b = warehouseData[whId].bookings.find(b=>b.id===id); 
   if(!b) return;
+  if (!b.checkInTime || !b.checkOutTime) {
+    alert('لا يمكن وضع الحالة مكتمل قبل تسجيل الدخول والخروج');
+    return;
+  }
+  b.statusUpdatedAt = new Date().toISOString();
   let gid = deriveGroupKey(b);
   (warehouseData[whId]?.bookings || []).forEach(x => {
     if (deriveGroupKey(x) === gid) {
+      if (!x.checkInTime) x.checkInTime = b.checkInTime;
+      if (!x.checkOutTime) x.checkOutTime = b.checkOutTime;
       x.status = 'completed';
+      x.statusUpdatedAt = b.statusUpdatedAt;
       upsertBookingToApi(whId, x);
     }
   });
@@ -1727,6 +1740,13 @@ function renderMyBookings() {
     let cartons = parts.reduce((s,p)=>s + (parseInt(p.cartons)||0), 0);
     let status = parts.some(p=>p.status==='cancelled') ? 'cancelled' : (parts.some(p=>p.status==='not_delivered') ? 'not_delivered' : (parts.some(p=>p.status==='completed') ? 'completed' : (parts.some(p=>p.status==='approved') ? 'approved' : (parts[0].status||''))));
     let canCancel = parts.every(p => (p.status === 'approved' || p.status === 'pending'));
+    // disable cancel if any part checked-in OR within 30 min of earliest slot start
+    let hasCheckIn = parts.some(p => !!p.checkInTime);
+    let earliestTime = parts.map(p=>p.time).filter(Boolean).sort()[0] || '';
+    let minsToStart = minutesUntilSlotStart(date, earliestTime);
+    let tooLate = (minsToStart !== null && minsToStart <= 30);
+    let cancelAllowed = canCancel && !hasCheckIn && !tooLate;
+    let cancelReason = hasCheckIn ? 'تم تسجيل الدخول بالمخزن' : (tooLate ? 'تبقى أقل من 30 دقيقة على بداية الموعد' : '');
     // Show queue number for the first slot (or '-')
     let q = parts[0].queueNo || '-';
     return `<tr>
@@ -1739,11 +1759,61 @@ function renderMyBookings() {
       <td>
         <div class="action-btns">
           <button class="btn-sm btn-details" type="button" onclick="trackMyBooking('${g.groupId}')">تتبع</button>
-          
+          <button class="btn-sm btn-cancel" type="button" ${cancelAllowed ? '' : 'disabled'} ${cancelAllowed ? '' : 'style="opacity:.45;cursor:not-allowed"'} title="${cancelAllowed ? '' : cancelReason}" onclick="cancelMyBooking('${g.groupId}')">إلغاء</button>
         </div>
       </td>
     </tr>`;
   }).join('');
+}
+
+function minutesUntilSlotStart(dateStr, timeStr) {
+  try {
+    if (!dateStr || !timeStr) return null;
+    // Local time: YYYY-MM-DDTHH:MM
+    const dt = new Date(`${dateStr}T${timeStr}:00`);
+    if (isNaN(dt.getTime())) return null;
+    const diffMs = dt.getTime() - Date.now();
+    return Math.floor(diffMs / 60000);
+  } catch(e) {
+    return null;
+  }
+}
+
+function cancelMyBooking(groupId) {
+  const gid = String(groupId || '').trim();
+  if (!gid) return;
+  if (!confirm('هل أنت متأكد من إلغاء الحجز؟')) return;
+
+  // find all parts across warehouses
+  let targets = [];
+  for (let whId in warehouseData) {
+    (warehouseData[whId]?.bookings || []).forEach(b => {
+      if (deriveGroupKey(b) === gid) targets.push({ whId, b });
+    });
+  }
+  if (!targets.length) return;
+
+  // Re-check rules using the latest local data
+  if (targets.some(x => !!x.b.checkInTime)) {
+    alert('لا يمكن الإلغاء بعد تسجيل الدخول بالمخزن');
+    return;
+  }
+  const date = targets[0].b.date;
+  const earliestTime = targets.map(x=>x.b.time).filter(Boolean).sort()[0] || '';
+  const minsToStart = minutesUntilSlotStart(date, earliestTime);
+  if (minsToStart !== null && minsToStart <= 30) {
+    alert('لا يمكن الإلغاء قبل الموعد بأقل من 30 دقيقة');
+    return;
+  }
+
+  targets.forEach(({whId, b}) => {
+    b.status = 'cancelled';
+    b.cancelledAt = new Date().toISOString();
+    upsertBookingToApi(whId, b);
+    saveWarehouseData(whId);
+  });
+  renderMyBookings();
+  renderSupplierSlots();
 }
 
 
@@ -1981,13 +2051,14 @@ function trackBooking() {
   }
   grouped.sort((a,b)=>String(a.time||'').localeCompare(String(b.time||'')));
   
-  let color = {approved:'green',completed:'blue'}[foundBooking.status] || 'green';
-  let label = {approved:'مؤكد',completed:'مكتمل'}[foundBooking.status] || 'مؤكد';
+  let color = {approved:'green',completed:'blue',cancelled:'gray',not_delivered:'red',pending:'amber',rejected:'red'}[foundBooking.status] || 'green';
+  let label = {approved:'مؤكد',completed:'مكتمل',cancelled:'تم الإلغاء',not_delivered:'لم يتم التسليم',pending:'معلق',rejected:'مرفوض'}[foundBooking.status] || 'مؤكد';
   let warehouseName = WAREHOUSES[foundWhId]?.name || foundWhId;
   
   const groupKey = deriveGroupKey(foundBooking);
   const totalTrucks = grouped.reduce((s,p)=>s+(parseFloat(p.truckCount)||0),0);
   const totalCartons = grouped.reduce((s,p)=>s+(parseInt(p.cartons)||0),0);
+  const q = (grouped.find(p=>p.queueNo)?.queueNo) || (foundBooking.queueNo || '-');
   const partsHtml = grouped.length > 1 ? `
     <div class="info-row"><span class="info-key">رقم الجروب</span><span class="info-val">${groupKey}</span></div>
     <div class="info-row"><span class="info-key">أجزاء الحجز</span><span class="info-val">${grouped.map(p=>p.id).join(' , ')}</span></div>
@@ -1995,6 +2066,7 @@ function trackBooking() {
 
   res.innerHTML = `<div style="display:flex;justify-content:space-between;margin-bottom:14px"><span>${groupKey}</span><span class="badge badge-${color}">${label}</span></div>
     ${partsHtml}
+    <div class="info-row"><span class="info-key">رقم الدور</span><span class="info-val">${q}</span></div>
     <div class="info-row"><span class="info-key">المخزن</span><span class="info-val">${warehouseName}</span></div>
     <div class="info-row"><span class="info-key">المورد</span><span class="info-val">${foundBooking.supplier}</span></div>
     <div class="info-row"><span class="info-key">التاريخ</span><span class="info-val">${formatDate(foundBooking.date)}</span></div>
@@ -2026,7 +2098,7 @@ function renderBookingsTable() {
   if (search) list = list.filter(b => b.supplier.toLowerCase().includes(search) || b.orderNum.toLowerCase().includes(search));
 
   let tbody = document.getElementById('bookingsTbody');
-  if (!list.length) { tbody.innerHTML = `<tr><td colspan="17"><div class="empty-state"><p>لا توجد حجوزات</p></div></td></tr>`; return; }
+  if (!list.length) { tbody.innerHTML = `<tr><td colspan="16"><div class="empty-state"><p>لا توجد حجوزات</p></div></td></tr>`; return; }
   let badge = {
     approved:'<span class="badge badge-green">مؤكد</span>',
     completed:'<span class="badge badge-blue">مكتمل</span>',
@@ -2044,6 +2116,21 @@ function renderBookingsTable() {
     const lockFinal = (currentWarehouseAccess !== 'all' && isFinal);
     const disAttr = lockFinal ? 'disabled' : '';
     const disStyle = lockFinal ? 'style="opacity:.45;cursor:not-allowed"' : '';
+
+    // After the booking day ends: if no warehouse action happened, lock edits for normal users.
+    const dayEnded = (b.date && b.date < today());
+    const noAction = (!b.checkInTime && !b.checkOutTime && !b.statusUpdatedAt);
+    const dayLock = (currentWarehouseAccess !== 'all' && dayEnded && noAction && !b.adminUnlocked);
+    const lockReason = dayLock ? 'انتهى يوم الحجز (لا يمكن التعديل إلا بعد فتحه من الأدمن)' : '';
+    const rowLocked = lockFinal || dayLock;
+    const canComplete = !!(b.checkInTime && b.checkOutTime);
+    const completeDis = (!canComplete || rowLocked) ? 'disabled' : '';
+    const completeStyle = (!canComplete || rowLocked) ? 'style="opacity:.45;cursor:not-allowed"' : '';
+
+    const commonDis = rowLocked ? 'disabled' : '';
+    const commonStyle = rowLocked ? 'style="opacity:.45;cursor:not-allowed"' : '';
+
+    const statusDate = b.statusUpdatedAt ? new Date(b.statusUpdatedAt).toLocaleString('ar-EG',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
     return `<tr class="${isSplit ? 'split-line' : ''}">
     <td><strong>${b.id}</strong>${isSplit ? `<span class=\"split-pill\">Split</span>` : ''}</td>
     <td>${groupKey || '-'}</td>
@@ -2057,21 +2144,33 @@ function renderBookingsTable() {
     <td>${b.truckType||'-'}</td>
     <td>${b.truckCount||'-'}</td>
     <td>${b.cartons||'-'}</td>
-    <td>${b.palletLoading||'-'}</td>
     <td>${b.plate}<br>${b.driver}</td>
     <td>${b.checkInTime ? new Date(b.checkInTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
     <td>${b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
     <td>${badge[b.status]}</td>
+    <td title="${lockReason}">${statusDate}</td>
     <td><div class="action-btns">
-      <button class="btn-sm btn-details" onclick="openBookingModal('${b.warehouseId}','${b.id}')">تفاصيل</button>
-      <button class="btn-sm btn-details" onclick="checkInBooking('${b.warehouseId}','${b.id}')">دخول</button>
-      <button class="btn-sm btn-details" onclick="checkOutBooking('${b.warehouseId}','${b.id}')">خروج</button>
-      <button class="btn-sm btn-cancel" ${disAttr} ${disStyle} onclick="markNotDelivered('${b.warehouseId}','${b.id}')">لم يتم التسليم</button>
-      <button class="btn-sm btn-complete" ${disAttr} ${disStyle} onclick="completeBooking('${b.warehouseId}','${b.id}')">مكتمل</button>
-      <button class="btn-sm btn-cancel" ${disAttr} ${disStyle} onclick="cancelBooking('${b.warehouseId}','${b.id}')">إلغاء</button>
+      <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="openBookingModal('${b.warehouseId}','${b.id}')">تفاصيل</button>
+      <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="checkInBooking('${b.warehouseId}','${b.id}')">دخول</button>
+      <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="checkOutBooking('${b.warehouseId}','${b.id}')">خروج</button>
+      <button class="btn-sm btn-cancel" ${rowLocked ? 'disabled' : disAttr} ${rowLocked ? 'style="opacity:.45;cursor:not-allowed"' : disStyle} onclick="markNotDelivered('${b.warehouseId}','${b.id}')">لم يتم التسليم</button>
+      <button class="btn-sm btn-complete" ${completeDis} ${completeStyle} onclick="completeBooking('${b.warehouseId}','${b.id}')">مكتمل</button>
+      <button class="btn-sm btn-cancel" ${rowLocked ? 'disabled' : disAttr} ${rowLocked ? 'style="opacity:.45;cursor:not-allowed"' : disStyle} onclick="cancelBooking('${b.warehouseId}','${b.id}')">إلغاء</button>
+      ${currentWarehouseAccess === 'all' ? `<button class=\"btn-sm btn-details\" type=\"button\" onclick=\"toggleAdminUnlock('${b.warehouseId}','${b.id}')\">${b.adminUnlocked ? 'قفل' : 'فتح'}</button>` : ''}
     </div>
   </td></tr>`;
   }).join('');
+}
+
+function toggleAdminUnlock(whId, id) {
+  if (currentWarehouseAccess !== 'all') return;
+  let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
+  if (!b) return;
+  b.adminUnlocked = !b.adminUnlocked;
+  b.statusUpdatedAt = new Date().toISOString();
+  upsertBookingToApi(whId, b);
+  saveWarehouseData(whId);
+  renderBookingsTable();
 }
 
 function markNotDelivered(whId, id) {
@@ -2081,6 +2180,7 @@ function markNotDelivered(whId, id) {
   (warehouseData[whId]?.bookings || []).forEach(x => {
     if (deriveGroupKey(x) === gid) {
       x.status = 'not_delivered';
+      x.statusUpdatedAt = new Date().toISOString();
       upsertBookingToApi(whId, x);
     }
   });
@@ -2094,6 +2194,7 @@ function checkInBooking(whId, id) {
   if (!b) return;
   // Only set if not set yet
   if (!b.checkInTime) b.checkInTime = new Date().toISOString();
+  b.statusUpdatedAt = new Date().toISOString();
   upsertBookingToApi(whId, b);
   saveWarehouseData(whId);
   renderBookingsTable();
@@ -2112,7 +2213,9 @@ function checkOutBooking(whId, id) {
   (warehouseData[whId]?.bookings || []).forEach(x => {
     if (deriveGroupKey(x) === gid) {
       if (!x.checkOutTime) x.checkOutTime = b.checkOutTime;
+      if (!x.checkInTime && b.checkInTime) x.checkInTime = b.checkInTime;
       x.status = 'completed';
+      x.statusUpdatedAt = new Date().toISOString();
       upsertBookingToApi(whId, x);
     }
   });
@@ -2136,7 +2239,6 @@ function openBookingModal(whId, id) {
     <div class="info-row"><span class="info-key">نوع العربية</span><span class="info-val">${b.truckType||'-'}</span></div>
     <div class="info-row"><span class="info-key">عدد العربيات</span><span class="info-val">${b.truckCount||'-'}</span></div>
     <div class="info-row"><span class="info-key">الكراتين</span><span class="info-val">${b.cartons||'-'}</span></div>
-    <div class="info-row"><span class="info-key">بالتات</span><span class="info-val">${b.palletLoading||'-'}</span></div>
     <div class="info-row"><span class="info-key">السيارة/السائق</span><span class="info-val">${b.plate} / ${b.driver}</span></div>
     <div class="info-row"><span class="info-key">الحالة</span><span class="info-val">${label}</span></div>
     ${b.notes?`<div class="info-row"><span class="info-key">ملاحظات</span><span class="info-val">${b.notes}</span></div>`:''}`;
@@ -3017,7 +3119,7 @@ function exportGoodsTypeReport() {
     if (b.status === 'cancelled') map[key].cancelled += 1;
     if (b.status === 'rejected') map[key].rejected += 1;
   });
-  let out = [["نوع البضاعة","عدد العربيات","إجمالي","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
+  let out = [["نوع البضاعة","عدد العربيات","إجمالي الحجوزات","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
   Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>{
     const truckTotal = countUniqueTrucks(list.filter(b => ((b.goodsType||'').trim()||'—') === x.key), b => (b.goodsType||'').trim()||'—');
     out.push([x.key, truckTotal, x.total, x.pending, x.approved, x.completed, x.not_delivered, x.cancelled, x.rejected]);
@@ -3068,7 +3170,7 @@ function exportTruckTypeReport() {
     if (b.status === 'cancelled') map[key].cancelled += 1;
     if (b.status === 'rejected') map[key].rejected += 1;
   });
-  let out = [["نوع العربية","عدد العربيات","إجمالي","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
+  let out = [["نوع العربية","عدد العربيات","إجمالي الحجوزات","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
   Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>{
     const truckTotal = countUniqueTrucks(list.filter(b => ((b.truckType||'').trim()||'—') === x.key), b => (b.truckType||'').trim()||'—');
     out.push([x.key, truckTotal, x.total, x.pending, x.approved, x.completed, x.not_delivered, x.cancelled, x.rejected]);
@@ -3188,7 +3290,7 @@ function exportSupplierSummary() {
     if (b.status === 'completed') map[key].completed += 1;
     if (b.status === 'rejected') map[key].rejected += 1;
   });
-  let rows = [["المورد","إجمالي","مؤكد","مكتمل","مرفوض"]];
+  let rows = [["المورد","إجمالي الحجوزات","مؤكد","مكتمل","مرفوض"]];
   Object.values(map).sort((a,b)=>b.total-a.total).forEach(s=>rows.push([s.supplier, s.total, s.approved, s.completed, s.rejected]));
   downloadExcel([{name:'ملخص الموردين', data: rows}], 'ملخص_الموردين.xlsx');
 }
