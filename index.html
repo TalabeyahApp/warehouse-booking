@@ -276,27 +276,17 @@ tbody tr:hover td{background:#fafaf8}
 .preview-table tbody td{padding:7px 8px 7px 0}
 </style>
 </head>
-<body class="boot-loading">
+<body>
 
 <script>
-  // Prevent flashing the login/main screens on refresh
-  try {
-    document.addEventListener('DOMContentLoaded', () => {
-      const ov = document.getElementById('loaderOverlay');
-      if (ov) ov.style.display = 'flex';
-    });
-  } catch(e) {}
-
-  // Fail-safe: if any runtime error happens during boot, stop infinite loader.
+  // Fail-safe: if any runtime error happens, stop infinite loader.
   try {
     window.addEventListener('error', () => {
       try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
-      try { document.body.classList.remove('boot-loading'); } catch(_) {}
       try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
     });
     window.addEventListener('unhandledrejection', () => {
       try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
-      try { document.body.classList.remove('boot-loading'); } catch(_) {}
       try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
     });
   } catch(e) {}
