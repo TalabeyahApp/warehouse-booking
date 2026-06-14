@@ -12,15 +12,22 @@
     const url = new URL(API_URL);
     url.searchParams.set('action', action);
     Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, String(v)));
-    const res = await fetch(url.toString(), { method: 'GET' });
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 12000);
+    const res = await fetch(url.toString(), { method: 'GET', signal: ctrl.signal });
+    clearTimeout(t);
     return res.json();
   }
   async function apiPost(action, data) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 12000);
     const res = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action, data }),
+      signal: ctrl.signal,
     });
+    clearTimeout(t);
     return res.json();
   }
   function nowIso(){ return new Date().toISOString(); }
@@ -277,6 +284,20 @@ tbody tr:hover td{background:#fafaf8}
     document.addEventListener('DOMContentLoaded', () => {
       const ov = document.getElementById('loaderOverlay');
       if (ov) ov.style.display = 'flex';
+    });
+  } catch(e) {}
+
+  // Fail-safe: if any runtime error happens during boot, stop infinite loader.
+  try {
+    window.addEventListener('error', () => {
+      try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
+      try { document.body.classList.remove('boot-loading'); } catch(_) {}
+      try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
+    });
+    window.addEventListener('unhandledrejection', () => {
+      try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
+      try { document.body.classList.remove('boot-loading'); } catch(_) {}
+      try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
     });
   } catch(e) {}
 </script>
