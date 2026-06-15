@@ -817,9 +817,9 @@ const SLOTS_PER_DAY = [
 // Admin can override capacity per (warehouse,date,time)
 function baseSlotCapacity(time) {
   // Default capacities (can be overridden per date/time from Sheet)
-  // 09:00 & 10:00 => 7
+  // 09:00..12:00 => 7
   // 13:00 => 4
-  if (time === '09:00' || time === '10:00') return 7;
+  if (time === '09:00' || time === '10:00' || time === '11:00' || time === '12:00') return 7;
   if (time === '13:00') return 4;
   return 6;
 }
@@ -1142,11 +1142,15 @@ async function silentRefreshTick() {
   try {
     if (!currentRole) return;
     if (silentRefreshing) return;
-    // Don't start a new refresh if the initial load is still in progress
-    if (dataLoadPromise) return;
+    // Don't overlap with a visible loader refresh
+    try {
+      const ov = document.getElementById('loaderOverlay');
+      if (ov && ov.style && ov.style.display !== 'none') return;
+    } catch(e) {}
     silentRefreshing = true;
+    // Force fresh fetch (without loader)
     dataLoadPromise = null;
-    await withTimeout(ensureDataLoaded(), 10000);
+    await withTimeout(loadWarehouseDataFromApi(), 10000);
 
     // Re-render current visible page to reflect new data, without changing tabs.
     const pageId = getActivePageId();
