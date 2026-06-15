@@ -1018,11 +1018,19 @@ async function loadWarehouseDataFromApi() {
       warehouseData[whId].blockedSlots.push(getSlotKey(date, time));
     });
 
-    // capacity overrides (normalize date/time like bookings)
+    // capacity overrides (prefer parsing from id to avoid Sheets time/date coercion)
     (caps || []).forEach(x => {
       const whId = x.warehouseId || x.warehouse || x.warehouseid;
-      const date = normalizeDate(x.date);
-      const time = normalizeTime(x.time);
+      let date = '';
+      let time = '';
+      const id = String(x.id || '').trim();
+      if (id.includes('|')) {
+        const parts = id.split('|');
+        date = (parts[1] || '').trim();
+        time = (parts[2] || '').trim();
+      }
+      if (!date) date = normalizeDate(x.date);
+      if (!time) time = normalizeTime(x.time);
       const cap = x.capacity;
       if (!whId || !warehouseData[whId] || !date || !time) return;
       const n = (cap === '' || cap === null || cap === undefined) ? null : Number(cap);
