@@ -1018,11 +1018,11 @@ async function loadWarehouseDataFromApi() {
       warehouseData[whId].blockedSlots.push(getSlotKey(date, time));
     });
 
-    // capacity overrides
+    // capacity overrides (normalize date/time like bookings)
     (caps || []).forEach(x => {
-      const whId = x.warehouseId || x.warehouse || x.warehouseid || x.warehouseId;
-      const date = x.date || '';
-      const time = x.time || '';
+      const whId = x.warehouseId || x.warehouse || x.warehouseid;
+      const date = normalizeDate(x.date);
+      const time = normalizeTime(x.time);
       const cap = x.capacity;
       if (!whId || !warehouseData[whId] || !date || !time) return;
       const n = (cap === '' || cap === null || cap === undefined) ? null : Number(cap);
