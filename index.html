@@ -1601,7 +1601,8 @@ function renderWarehouse() {
   let date = document.getElementById('whDate').value || today();
   let whId = currentWarehouse;
   let whData = warehouseData[whId];
-  let dayBookings = whData.bookings.filter(b => b.date === date && b.status !== 'rejected');
+  // For cards/slots, ignore cancelled & rejected bookings
+  let dayBookings = whData.bookings.filter(b => b.date === date && b.status !== 'rejected' && b.status !== 'cancelled');
 
   // Unique suppliers count (no duplicates)
   let uniqueSuppliers = new Set(dayBookings.map(b => (b.supplier||'').trim()).filter(Boolean));
@@ -1650,7 +1651,7 @@ function renderWarehouse() {
     let bookedCount = getSlotBookedCount(whId, date, time);
     let cap = slotCapacity(whId, date, time);
     let available = cap - bookedCount;
-    let bookingsInSlot = whData.bookings.filter(b => b.date === date && b.time === time && b.status !== 'rejected');
+    let bookingsInSlot = whData.bookings.filter(b => b.date === date && b.time === time && b.status !== 'rejected' && b.status !== 'cancelled');
     
     let info = '';
     if (bookingsInSlot.length > 0) {
