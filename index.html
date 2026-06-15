@@ -536,7 +536,7 @@ function closeSignupModal(){
   <div class="booking-layout">
     <div class="panel">
       <h2>📅 احجز موعد جديد</h2>
-      <div class="form-group"><label>اسم المورد / الشركة</label><input type="text" id="supName" readonly style="background:#f0f0ec"></div>
+      <div class="form-group"><label>اسم المورد / الشركة</label><input type="text" id="supName" readonly style="background:#f0f0ec" placeholder="اكتب اسم المورد"></div>
       <div class="form-row">
         <div class="form-group"><label>رقم الأوردر</label><input type="text" id="supOrder" placeholder="PO-12345"></div>
         <div class="form-group"><label>نوع البضاعة <span style="color:red">*</span></label><select id="supType">
@@ -593,7 +593,7 @@ function closeSignupModal(){
 <div class="page" id="page-bookings">
   <div class="page-head"><div><h1>كل الحجوزات</h1><p>عرض وإدارة جميع الحجوزات</p></div><img class="page-logo" src="data:image/png;base64,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" alt="Talabeya"></div>
   <div class="warehouse-selector">
-    <label>🏭 اختر المخزن:</label>
+    <label>�� اختر المخزن:</label>
     <select id="bookingsWarehouseFilter">
       <option value="">كل المخازن</option>
       <option value="warehouse1">Talabeya-NSR</option>
@@ -607,7 +607,7 @@ function closeSignupModal(){
     <input type="date" class="date-input" id="filterDate">
     <input type="text" class="date-input" id="filterSearch" placeholder="بحث..." style="flex:1">
   </div>
-  <div class="table-wrap"><table id="bookingsTable"><thead><tr><th>رقم الحجز</th><th>رقم الجروب</th><th>رقم الدور</th><th>المخزن</th><th>المورد</th><th>رقم الأوردر</th><th>التاريخ</th><th>الوقت</th><th>نوع البضاعة</th><th>العربية</th><th>عدد العربيات</th><th>الكراتين</th><th>السيارة/السائق</th><th>وقت الدخول</th><th>وقت الخروج</th><th>الحالة</th><th>تاريخ الحالة</th><th>إجراء</th></tr></thead><tbody id="bookingsTbody"></tbody></table></div>
+  <div class="table-wrap"><table id="bookingsTable"><thead><tr><th>رقم الحجز</th><th>رقم الجروب</th><th>رقم الدور</th><th>المخزن</th><th>المورد</th><th>رقم الأوردر</th><th>التاريخ</th><th>الوقت</th><th>نوع البضاعة</th><th>العربية</th><th>عدد العربيات</th><th>الكراتين</th><th>السيارة/السائق</th><th>وقت الوصول</th><th>وقت الدخول</th><th>وقت الخروج</th><th>الحالة</th><th>تاريخ الحالة</th><th>إجراء</th></tr></thead><tbody id="bookingsTbody"></tbody></table></div>
 </div>
 
 <!-- REPORTS PAGE -->
@@ -767,7 +767,11 @@ const SLOTS_PER_DAY = [
 // Slot capacity: default 6, but 11:00 and 12:00 are 7
 // Admin can override capacity per (warehouse,date,time)
 function baseSlotCapacity(time) {
-  if (time === '11:00' || time === '12:00') return 7;
+  // Default capacities (can be overridden per date/time from Sheet)
+  // 09:00 & 10:00 => 7
+  // 13:00 => 4
+  if (time === '09:00' || time === '10:00') return 7;
+  if (time === '13:00') return 4;
   return 6;
 }
 
@@ -1010,6 +1014,7 @@ async function loadWarehouseDataFromApi() {
         adminUnlocked: (String(b.adminUnlocked || b.adminunlocked || '').toLowerCase() === 'true') || (b.adminUnlocked === true) || (b.adminunlocked === true),
         notes: b.notes || '',
         createdAt: b.createdAt || '',
+        arrivalTime: b.arrivalTime || b.arrivaltime || '',
         checkInTime: b.checkInTime || '',
         checkOutTime: b.checkOutTime || '',
         cancelledAt: b.cancelledAt || '',
@@ -1158,6 +1163,7 @@ async function upsertBookingToApi(whId, booking) {
       statusUpdatedAt: booking.statusUpdatedAt || '',
       adminUnlocked: booking.adminUnlocked ? true : false,
       createdAt: booking.createdAt || '',
+      arrivalTime: booking.arrivalTime || '',
       checkInTime: booking.checkInTime || '',
       checkOutTime: booking.checkOutTime || '',
       cancelledAt: booking.cancelledAt || '',
@@ -1559,7 +1565,7 @@ function renderWarehouse() {
       info += `</div>`;
     }
     
-    let label = {available:'متاح',booked:'محجوز',blocked:'مغلق',full:'ممتلئ',warning:'متبقي',past:'مغلق'}[st];
+    let label = {available:'متاح',booked:'محجوز',blocked:'مغلق',full:'ممتلئ',warning:'متب��ي',past:'مغلق'}[st];
     let capacityClass = available > 0 ? (available <= 1 ? 'capacity-warning' : '') : 'capacity-full';
     let capacityText = available > 0 ? (available <= 1 ? `⚠️ متبقي: ${fmtCap(available)} عربية فقط` : `متاح: ${fmtCap(available)} عربية`) : 'مكتمل';
     let clickFn = (st === 'available' || st === 'warning') ? `onclick="toggleBlock('${date}','${time}')"` : '';
@@ -1837,6 +1843,7 @@ function renderMyBookings() {
       <td>
         <div class="action-btns">
           <button class="btn-sm btn-details" type="button" onclick="trackMyBooking('${g.groupId}')">تتبع</button>
+          <button class="btn-sm btn-details" type="button" onclick="setArrivalSupplier('${g.groupId}')">وصول</button>
           <button class="btn-sm btn-cancel" type="button" ${cancelAllowed ? '' : 'disabled'} ${cancelAllowed ? '' : 'style="opacity:.45;cursor:not-allowed"'} title="${cancelAllowed ? '' : cancelReason}" onclick="cancelMyBooking('${g.groupId}')">إلغاء</button>
         </div>
       </td>
@@ -1894,6 +1901,52 @@ function cancelMyBooking(groupId) {
   renderSupplierSlots();
 }
 
+function supplierCanSetArrivalForGroup(groupId) {
+  const gid = String(groupId || '').trim();
+  if (!gid) return false;
+  // must have a booking for today
+  const todayStr = today();
+  for (let whId in warehouseData) {
+    const parts = (warehouseData[whId]?.bookings || []).filter(b => deriveGroupKey(b) === gid);
+    if (!parts.length) continue;
+    // supplier must match (unless supplier_admin)
+    const isSupplierAdmin = (currentSupplierData && currentSupplierData.username === 'supplier_admin');
+    if (!isSupplierAdmin) {
+      const supplierName = (currentSupplierData?.company || '').trim();
+      if (!parts.every(p => (p.supplier || '').trim() === supplierName)) continue;
+    }
+    // only allow if the booking date is today
+    if (parts.some(p => (p.date || '').trim() === todayStr)) return true;
+  }
+  return false;
+}
+
+function setArrivalSupplier(groupId) {
+  const gid = String(groupId || '').trim();
+  if (!gid) return;
+  if (!supplierCanSetArrivalForGroup(gid)) {
+    alert('لا يمكن تسجيل الوصول إلا في نفس يوم الحجز');
+    return;
+  }
+  const ts = new Date().toISOString();
+  let changed = false;
+  for (let whId in warehouseData) {
+    (warehouseData[whId]?.bookings || []).forEach(b => {
+      if (deriveGroupKey(b) === gid && (b.date || '').trim() === today()) {
+        if (!b.arrivalTime) {
+          b.arrivalTime = ts;
+          upsertBookingToApi(whId, b);
+          changed = true;
+        }
+      }
+    });
+  }
+  if (changed) {
+    renderMyBookings();
+    alert('✅ تم تسجيل وقت الوصول');
+  }
+}
+
 
 
 function trackMyBooking(id) {
@@ -1918,7 +1971,7 @@ function pickSlot(el, time) {
   
   if (requestedUnits > available) {
     btn.disabled = false;
-    btn.textContent = `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
+    btn.textContent = `�� سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
   } else if (requestedUnits === available && available > 0) {
     btn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
   } else {
@@ -1932,6 +1985,16 @@ function submitBooking() {
   if (!currentSupplierData) { showAlert('bookAlert', 'خطأ في تسجيل الدخول', 'error'); return; }
   
   let supplier = document.getElementById('supName').value.trim();
+  // supplier_admin can book for any supplier name that exists in Google Sheet (Suppliers tab)
+  if (currentSupplierData.username === 'supplier_admin') {
+    if (!supplier) { showAlert('bookAlert', 'يرجى كتابة اسم المورد', 'error'); return; }
+    const list = Array.isArray(remoteSuppliers) ? remoteSuppliers : [];
+    const ok = list.some(s => String(s.company || '').trim().toLowerCase() === supplier.toLowerCase());
+    if (!ok) {
+      showAlert('bookAlert', 'اسم المورد غير موجود في جوجل شيت', 'error');
+      return;
+    }
+  }
   let orderNum = document.getElementById('supOrder').value.trim();
   let goodsType = document.getElementById('supType').value;
   let plate = document.getElementById('supPlate').value.trim();
@@ -1944,6 +2007,14 @@ function submitBooking() {
   let notes = document.getElementById('supNotes').value.trim();
   let date = document.getElementById('supDate').value;
   let whId = document.getElementById('bookingWarehouseSelect').value;
+
+  // Non-admin suppliers cannot book on the same day
+  if (currentSupplierData.username !== 'supplier_admin') {
+    if (date === today()) {
+      showAlert('bookAlert', 'غير مسموح بالحجز في نفس اليوم. يرجى اختيار يوم آخر.', 'error');
+      return;
+    }
+  }
 
   // Optional: orderNum, plate, driver
   if (!goodsType) { showAlert('bookAlert', 'يرجى اختيار نوع البضاعة', 'error'); return; }
@@ -2209,6 +2280,7 @@ function renderBookingsTable() {
     const commonStyle = rowLocked ? 'style="opacity:.45;cursor:not-allowed"' : '';
 
     const statusDate = b.statusUpdatedAt ? new Date(b.statusUpdatedAt).toLocaleString('ar-EG',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-';
+    const arrivalLabel = b.arrivalTime ? new Date(b.arrivalTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '-';
     return `<tr class="${isSplit ? 'split-line' : ''}">
     <td><strong>${b.id}</strong>${isSplit ? `<span class=\"split-pill\">Split</span>` : ''}</td>
     <td>${groupKey || '-'}</td>
@@ -2223,21 +2295,39 @@ function renderBookingsTable() {
     <td>${b.truckCount||'-'}</td>
     <td>${b.cartons||'-'}</td>
     <td>${b.plate}<br>${b.driver}</td>
+    <td>${arrivalLabel}</td>
     <td>${b.checkInTime ? new Date(b.checkInTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
     <td>${b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
     <td>${badge[b.status]}</td>
     <td title="${lockReason}">${statusDate}</td>
     <td><div class="action-btns">
       <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="openBookingModal('${b.warehouseId}','${b.id}')">تفاصيل</button>
+      <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="setArrivalWarehouse('${b.warehouseId}','${b.id}')">وصول</button>
       <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="checkInBooking('${b.warehouseId}','${b.id}')">دخول</button>
       <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="checkOutBooking('${b.warehouseId}','${b.id}')">خروج</button>
       <button class="btn-sm btn-cancel" ${rowLocked ? 'disabled' : disAttr} ${rowLocked ? 'style="opacity:.45;cursor:not-allowed"' : disStyle} onclick="markNotDelivered('${b.warehouseId}','${b.id}')">لم يتم التسليم</button>
-      <button class="btn-sm btn-complete" ${completeDis} ${completeStyle} onclick="completeBooking('${b.warehouseId}','${b.id}')">مكتمل</button>
+      <button class="btn-sm btn-complete" ${completeDis} ${completeStyle} onclick="completeBooking('${b.warehouseId}','${b.id}')">مكت��ل</button>
       <button class="btn-sm btn-cancel" ${rowLocked ? 'disabled' : disAttr} ${rowLocked ? 'style="opacity:.45;cursor:not-allowed"' : disStyle} onclick="cancelBooking('${b.warehouseId}','${b.id}')">إلغاء</button>
       ${currentWarehouseAccess === 'all' ? `<button class=\"btn-sm btn-details\" type=\"button\" onclick=\"toggleAdminUnlock('${b.warehouseId}','${b.id}')\">${b.adminUnlocked ? 'قفل' : 'فتح'}</button>` : ''}
     </div>
   </td></tr>`;
   }).join('');
+}
+
+function setArrivalWarehouse(whId, id) {
+  let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
+  if (!b) return;
+  let gid = deriveGroupKey(b);
+  const ts = new Date().toISOString();
+  (warehouseData[whId]?.bookings || []).forEach(x => {
+    if (deriveGroupKey(x) === gid) {
+      if (!x.arrivalTime) x.arrivalTime = ts;
+      upsertBookingToApi(whId, x);
+    }
+  });
+  saveWarehouseData(whId);
+  renderBookingsTable();
+  renderWarehouse();
 }
 
 function toggleAdminUnlock(whId, id) {
@@ -2575,7 +2665,7 @@ function addSupplierUserRow() {
 function deleteSupplierUserRow(idx) {
   let list = loadSupplierUsers();
   if (!list[idx]) return;
-  if (list.length === 1) { alert('لا يمكن حذف آخر مستخدم للموردين'); return; }
+  if (list.length === 1) { alert('لا يمكن ح��ف آخر مستخدم للموردين'); return; }
   if (!confirm('هل تريد حذف هذا المستخدم؟')) return;
   let u = list[idx];
   list.splice(idx, 1);
@@ -2813,7 +2903,18 @@ function applySupplierLogin(match) {
   document.getElementById('topbarNav').innerHTML = `<button class="tab-btn active" onclick="switchPage('supplier')">🚚 بوابة المورد</button>`;
   const isSupplierAdmin = (match.username === 'supplier_admin');
   document.getElementById('userPillLabel').textContent = isSupplierAdmin ? 'ادمن المورد' : (match.company || '—');
-  document.getElementById('supName').value = isSupplierAdmin ? '' : (match.company || '');
+  const supNameEl = document.getElementById('supName');
+  if (supNameEl) {
+    if (isSupplierAdmin) {
+      supNameEl.readOnly = false;
+      supNameEl.style.background = 'var(--surface)';
+      supNameEl.value = '';
+    } else {
+      supNameEl.readOnly = true;
+      supNameEl.style.background = '#f0f0ec';
+      supNameEl.value = (match.company || '');
+    }
+  }
   if (match.defaultWarehouse) {
     document.getElementById('bookingWarehouseSelect').value = match.defaultWarehouse;
   }
