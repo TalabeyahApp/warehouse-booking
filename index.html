@@ -2049,6 +2049,14 @@ function pickSlot(el, time) {
   btn.disabled = false;
   
   let date = document.getElementById('supDate').value;
+  // Non-admin suppliers cannot book on the same day (show message on button)
+  if (currentSupplierData && currentSupplierData.username !== 'supplier_admin') {
+    if (date === today()) {
+      btn.disabled = true;
+      btn.textContent = 'لا يمكن الحجز فى نفس اليوم حاول الحجز فى يوم اخر';
+      return;
+    }
+  }
   let truckCount = parseFloat(document.getElementById('supTruckCount').value) || 1;
   let truckType = document.getElementById('supTruckType').value;
   let requestedUnits = truckCount * truckUnitWeight(truckType);
@@ -2065,6 +2073,18 @@ function pickSlot(el, time) {
   }
   
   checkCapacity();
+}
+
+function supplierHasBookingOnDate(supplierName, dateStr) {
+  const sname = String(supplierName || '').trim();
+  if (!sname || !dateStr) return false;
+  for (let whId in warehouseData) {
+    const list = warehouseData[whId]?.bookings || [];
+    if (list.some(b => String(b.supplier || '').trim() === sname && String(b.date || '').trim() === dateStr && (b.status !== 'cancelled'))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function submitBooking() {
@@ -2097,7 +2117,15 @@ function submitBooking() {
   // Non-admin suppliers cannot book on the same day
   if (currentSupplierData.username !== 'supplier_admin') {
     if (date === today()) {
-      showAlert('bookAlert', 'غير مسموح بالحجز في نفس اليوم. يرجى اختيار يوم آخر.', 'error');
+      showAlert('bookAlert', 'لا يمكن الحجز فى نفس اليوم حاول الحجز فى يوم اخر', 'error');
+      return;
+    }
+  }
+
+  // One booking per supplier per day (except supplier_admin)
+  if (currentSupplierData.username !== 'supplier_admin') {
+    if (supplierHasBookingOnDate(supplier, date)) {
+      showAlert('bookAlert', 'غير مسموح بأكثر من حجز في نفس اليوم.', 'error');
       return;
     }
   }
