@@ -503,11 +503,13 @@ function closeSignupModal(){
       </div>
     </div>
     <div class="report-filters" style="margin-top:0">
-      <input type="date" class="date-input" id="myBookingsDate">
+      <input type="date" class="date-input" id="myBookingsFrom" placeholder="من">
+      <input type="date" class="date-input" id="myBookingsTo" placeholder="إلى">
+      <input type="text" class="date-input" id="myBookingsSupplier" placeholder="اسم المورد" style="min-width:180px;display:none">
     </div>
     <div style="overflow-x:auto;max-height:220px">
       <table class="preview-table" style="margin-top:0">
-        <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>التاريخ</th><th>الوقت</th><th>عدد العربيات</th><th>الحالة</th><th>إجراء</th></tr></thead>
+        <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>المورد</th><th>التاريخ</th><th>الوقت</th><th>عدد العربيات</th><th>الحالة</th><th>إجراء</th></tr></thead>
         <tbody id="myBookingsTbody"></tbody>
       </table>
     </div>
@@ -1766,17 +1768,26 @@ function renderMyBookings() {
   if (!currentSupplierData) return;
   let tbody = document.getElementById('myBookingsTbody');
   if (!tbody) return;
-  let dateFilter = (document.getElementById('myBookingsDate')?.value || '').trim();
+  let fromStr = (document.getElementById('myBookingsFrom')?.value || '').trim();
+  let toStr = (document.getElementById('myBookingsTo')?.value || '').trim();
+  let supplierFilter = (document.getElementById('myBookingsSupplier')?.value || '').trim().toLowerCase();
+  const isSupplierAdmin = (currentSupplierData.username === 'supplier_admin');
   // Supplier name used in bookings is the company name
   let supplierName = (currentSupplierData.company || document.getElementById('supName')?.value || '').trim();
   let all = [];
   for (let whId in warehouseData) {
     (warehouseData[whId]?.bookings || []).forEach(b => {
-      if ((b.supplier || '').trim() === supplierName) {
-        if (!dateFilter || b.date === dateFilter) {
-          all.push({ ...b, warehouseId: whId });
-        }
+      const sameSupplier = ((b.supplier || '').trim() === supplierName);
+      const allowed = isSupplierAdmin ? true : sameSupplier;
+      if (!allowed) return;
+      const d = (b.date || '').trim();
+      if (fromStr && d && d < fromStr) return;
+      if (toStr && d && d > toStr) return;
+      if (isSupplierAdmin && supplierFilter) {
+        const s = String(b.supplier || '').trim().toLowerCase();
+        if (!s.includes(supplierFilter)) return;
       }
+      all.push({ ...b, warehouseId: whId });
     });
   }
   all.sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
@@ -1818,6 +1829,7 @@ function renderMyBookings() {
     return `<tr>
       <td><strong>${g.groupId}</strong></td>
       <td>${q}</td>
+      <td>${parts[0].supplier || '-'}</td>
       <td>${formatDate(date)}</td>
       <td>${timeLabel}</td>
       <td>${fmtCap(trucks)}</td>
@@ -2799,15 +2811,23 @@ function applySupplierLogin(match) {
   currentRole = 'supplier';
   currentSupplierData = match;
   document.getElementById('topbarNav').innerHTML = `<button class="tab-btn active" onclick="switchPage('supplier')">🚚 بوابة المورد</button>`;
-  document.getElementById('userPillLabel').textContent = match.company || '—';
-  document.getElementById('supName').value = match.company || '';
+  const isSupplierAdmin = (match.username === 'supplier_admin');
+  document.getElementById('userPillLabel').textContent = isSupplierAdmin ? 'ادمن المورد' : (match.company || '—');
+  document.getElementById('supName').value = isSupplierAdmin ? '' : (match.company || '');
   if (match.defaultWarehouse) {
     document.getElementById('bookingWarehouseSelect').value = match.defaultWarehouse;
   }
   document.getElementById('supDate').value = today();
-  // default filter for "حجوزاتي"
-  let myDf = document.getElementById('myBookingsDate');
-  if (myDf && !myDf.value) myDf.value = today();
+  // default filter for "حجوزاتي" (from/to)
+  let myFrom = document.getElementById('myBookingsFrom');
+  let myTo = document.getElementById('myBookingsTo');
+  if (myFrom && !myFrom.value) myFrom.value = today();
+  if (myTo && !myTo.value) myTo.value = today();
+  // supplier filter visible only for supplier_admin
+  try {
+    const supF = document.getElementById('myBookingsSupplier');
+    if (supF) supF.style.display = (match.username === 'supplier_admin') ? 'block' : 'none';
+  } catch(e) {}
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('topbar').style.display = 'flex';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -2923,7 +2943,9 @@ document.getElementById('filterDate').onchange = () => {
 };
 document.getElementById('filterSearch').oninput = renderBookingsTable;
 document.getElementById('supDate').onchange = () => { refreshDataWithLoader().then(() => { renderSupplierSlots(); checkCapacity(); }); };
-document.getElementById('myBookingsDate').onchange = renderMyBookings;
+document.getElementById('myBookingsFrom').onchange = renderMyBookings;
+document.getElementById('myBookingsTo').onchange = renderMyBookings;
+document.getElementById('myBookingsSupplier').oninput = renderMyBookings;
 document.getElementById('supTruckCount').oninput = checkCapacity;
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
 document.getElementById('exportAllBtn').onclick = exportAllSheets;
