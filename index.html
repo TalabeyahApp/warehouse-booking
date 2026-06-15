@@ -19,15 +19,31 @@
     return res.json();
   }
   async function apiPost(action, data) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 12000);
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, data }),
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
+    const payload = JSON.stringify({ action, data });
+
+    async function doPost(url) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 12000);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: payload,
+        signal: ctrl.signal,
+        redirect: 'manual',
+      });
+      clearTimeout(t);
+      return res;
+    }
+
+    // Google Apps Script Web App often responds with 302 to a googleusercontent.com URL.
+    // Browsers convert POST -> GET on 302, which drops the body, so writes won't happen.
+    // Fix: follow redirect manually and re-POST to the Location.
+    let res = await doPost(API_URL);
+    if ((res.status === 301 || res.status === 302 || res.status === 303) && res.headers.get('Location')) {
+      const loc = res.headers.get('Location');
+      res = await doPost(loc);
+    }
+
     return res.json();
   }
   function nowIso(){ return new Date().toISOString(); }
