@@ -439,7 +439,7 @@ function closeSignupModal(){
     <div style="overflow:auto;max-height:320px">
       <table class="preview-table" style="margin-top:0">
         <thead>
-          <tr><th>المستخدم</th><th>البريد</th><th>كلمة المرور</th><th>اسم الشركة</th><th>المخزن الافتراضي</th><th></th></tr>
+          <tr><th>المستخدم</th><th>البريد</th><th>كلمة المرور</th><th>اسم الشركة</th><th>المخزن الافتراضي</th><th>ادمن؟</th><th></th></tr>
         </thead>
         <tbody id="supplierUsersTbody"></tbody>
       </table>
@@ -2765,6 +2765,9 @@ function renderSupplierUsersModal() {
           ${whOptions}
         </select>
       </td>
+      <td style="text-align:center">
+        <input type="checkbox" data-sup-idx="${idx}" data-field="isAdmin" ${u.isAdmin ? 'checked' : ''}>
+      </td>
       <td><button class="btn-sm btn-cancel" type="button" onclick="deleteSupplierUserRow(${idx})">حذف</button></td>
     </tr>`;
   }).join('');
@@ -2811,7 +2814,10 @@ function saveSupplierUsersFromModal() {
   inputs.forEach(inp => {
     let idx = parseInt(inp.getAttribute('data-sup-idx'));
     let field = inp.getAttribute('data-field');
-    if (Number.isFinite(idx) && list[idx]) {
+    if (!(Number.isFinite(idx) && list[idx])) return;
+    if (inp.type === 'checkbox') {
+      list[idx][field] = !!inp.checked;
+    } else {
       list[idx][field] = (inp.value || '').trim();
     }
   });
@@ -2835,6 +2841,7 @@ function saveSupplierUsersFromModal() {
           password: u.password,
           company: u.company,
           defaultWarehouse: u.defaultWarehouse || 'warehouse1',
+          isAdmin: u.isAdmin ? true : false,
           updatedAt: nowIso(),
         });
       }
