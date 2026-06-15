@@ -760,6 +760,55 @@ const WAREHOUSES = {
   warehouse4: { id: 'warehouse4', name: 'Talabeya-Hub', code: 'HUB' }
 };
 
+// Warehouse locations (lat/lng). Fill these values.
+// Used to enable "وصول" for suppliers only when near the warehouse.
+const WAREHOUSE_LOCATIONS = {
+  warehouse1: { lat: 30.040545790106176, lng: 31.346015064418015 },
+  warehouse2: { lat: null, lng: null },
+  warehouse3: { lat: null, lng: null },
+  warehouse4: { lat: null, lng: null },
+};
+
+const ARRIVAL_GEOFENCE_METERS = 300; // radius to consider "arrived"
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function getCurrentPositionOnce(options = {}) {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('no_geolocation'));
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 0,
+      ...options,
+    });
+  });
+}
+
+async function isInsideWarehouseGeofence(warehouseId) {
+  const loc = WAREHOUSE_LOCATIONS[warehouseId];
+  if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') {
+    // If no coordinates configured, allow arrival (fallback) to avoid blocking ops.
+    return { ok: true, allowed: true, reason: 'no_location_config' };
+  }
+  const pos = await getCurrentPositionOnce();
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+  const dist = haversineMeters(lat, lng, loc.lat, loc.lng);
+  return { ok: true, allowed: dist <= ARRIVAL_GEOFENCE_METERS, distanceMeters: dist };
+}
+
 const SLOTS_PER_DAY = [
   '09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00'
 ];
@@ -1672,7 +1721,7 @@ function editSlotCapacity(date, time) {
 }
 
 function cancelBooking(whId, id) {
-  if(confirm('هل أنت متأكد من إلغاء هذا الحجز؟')){ 
+  if(confirm('هل أنت متأكد من إلغاء هذا ال��جز؟')){ 
     let b = warehouseData[whId].bookings.find(b=>b.id===id);
     if(b){
       let gid = deriveGroupKey(b);
@@ -1928,6 +1977,43 @@ function setArrivalSupplier(groupId) {
     alert('لا يمكن تسجيل الوصول إلا في نفس يوم الحجز');
     return;
   }
+  // Geofence: only allow when supplier is inside the warehouse location
+  try {
+    const whId = document.getElementById('bookingWarehouseSelect')?.value || '';
+    if (whId) {
+      showLoader('جاري تحديد موقعك...');
+      isInsideWarehouseGeofence(whId).then(r => {
+        hideLoader();
+        if (!r.allowed) {
+          const d = (r && typeof r.distanceMeters === 'number') ? Math.round(r.distanceMeters) : null;
+          alert(d ? `لا يمكن تسجيل الوصول: أنت بعيد عن المخزن حوالي ${d} متر` : 'لا يمكن تسجيل الوصول: أنت خارج لوكيشن المخزن');
+          return;
+        }
+        // proceed
+        const ts = new Date().toISOString();
+        let changed = false;
+        for (let wid in warehouseData) {
+          (warehouseData[wid]?.bookings || []).forEach(b => {
+            if (deriveGroupKey(b) === gid && (b.date || '').trim() === today()) {
+              if (!b.arrivalTime) {
+                b.arrivalTime = ts;
+                upsertBookingToApi(wid, b);
+                changed = true;
+              }
+            }
+          });
+        }
+        if (changed) {
+          renderMyBookings();
+          alert('✅ تم تسجيل وقت الوصول');
+        }
+      }).catch(err => {
+        hideLoader();
+        alert('لم نتمكن من تحديد موقعك. يرجى السماح بالـ GPS ثم إعادة المحاولة.');
+      });
+      return;
+    }
+  } catch(e) {}
   const ts = new Date().toISOString();
   let changed = false;
   for (let whId in warehouseData) {
