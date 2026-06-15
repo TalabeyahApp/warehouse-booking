@@ -1603,7 +1603,10 @@ function editSlotCapacity(date, time) {
     saveWarehouseData(whId);
     // Sync delete to Sheets so all users fall back to default capacity
     try {
-      apiPost('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` });
+      showLoader('جاري التحميل...');
+      apiPost('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` })
+        .then(() => refreshDataWithLoaderSafe().then(() => renderWarehouse()))
+        .finally(() => hideLoader());
     } catch(e) {}
     renderWarehouse();
     return;
@@ -1617,6 +1620,7 @@ function editSlotCapacity(date, time) {
   saveWarehouseData(whId);
   // Sync to Sheets (shared)
   try {
+    showLoader('جاري التحميل...');
     apiPost('upsertSlotCapacityOverride', {
       id: `${whId}|${date}|${time}`,
       warehouseId: whId,
@@ -1624,7 +1628,9 @@ function editSlotCapacity(date, time) {
       time,
       capacity: n,
       updatedAt: nowIso(),
-    });
+    })
+      .then(() => refreshDataWithLoaderSafe().then(() => renderWarehouse()))
+      .finally(() => hideLoader());
   } catch(e) {}
   renderWarehouse();
 }
