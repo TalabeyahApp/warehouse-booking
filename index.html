@@ -12,6 +12,8 @@
     const url = new URL(API_URL);
     url.searchParams.set('action', action);
     Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, String(v)));
+    // cache-bust so users get latest data on refresh
+    url.searchParams.set('_ts', String(Date.now()));
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 12000);
     const res = await fetch(url.toString(), { method: 'GET', signal: ctrl.signal });
