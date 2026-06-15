@@ -1135,9 +1135,42 @@ function ensureDataLoaded() {
 
 // Auto-sync (poll) every 10 seconds when logged in
 let autoSyncTimer = null;
+let silentRefreshing = false;
+
+async function silentRefreshTick() {
+  // Silent refresh: no loader, no navigation, no overlap.
+  try {
+    if (!currentRole) return;
+    if (silentRefreshing) return;
+    // Don't start a new refresh if the initial load is still in progress
+    if (dataLoadPromise) return;
+    silentRefreshing = true;
+    dataLoadPromise = null;
+    await withTimeout(ensureDataLoaded(), 10000);
+
+    // Re-render current visible page to reflect new data, without changing tabs.
+    const pageId = getActivePageId();
+    if (pageId === 'warehouse') renderWarehouse();
+    if (pageId === 'bookings') renderBookingsTable();
+    if (pageId === 'reports') refreshReportsDashboard();
+    if (pageId === 'supplier') {
+      renderSupplierSlots();
+      renderMyBookings();
+    }
+  } catch (e) {
+    // swallow errors to avoid showing loader / breaking UX
+    console.error(e);
+  } finally {
+    silentRefreshing = false;
+  }
+}
+
 function startAutoSync() {
-  // Auto-sync disabled: refresh data only when changing date or manual refresh.
+  // Silent auto-sync every 30 seconds (no loader)
   stopAutoSync();
+  autoSyncTimer = setInterval(() => {
+    silentRefreshTick();
+  }, 30000);
 }
 
 function stopAutoSync() {
