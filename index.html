@@ -2210,7 +2210,8 @@ function checkOutBooking(whId, id) {
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
   if (!b.checkInTime) {
-    if (!confirm('لم يتم تسجيل وقت الدخول. هل تريد تسجيل الخروج الآن؟')) return;
+    alert('لا يمكن تسجيل الخروج قبل تسجيل الدخول');
+    return;
   }
   if (!b.checkOutTime) b.checkOutTime = new Date().toISOString();
   // Auto-complete on checkout
