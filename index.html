@@ -2113,7 +2113,7 @@ function renderBookingsTable() {
     const parts = idStr.split('-').filter(Boolean);
     const isSplit = (parts.length >= 3 && /^\d+$/.test(parts[parts.length-1]));
     const isFinal = (b.status === 'completed' || b.status === 'cancelled' || b.status === 'not_delivered');
-    const lockFinal = (currentWarehouseAccess !== 'all' && isFinal);
+    const lockFinal = (currentWarehouseAccess !== 'all' && isFinal && !b.adminUnlocked);
     const disAttr = lockFinal ? 'disabled' : '';
     const disStyle = lockFinal ? 'style="opacity:.45;cursor:not-allowed"' : '';
 
@@ -2168,11 +2168,9 @@ function toggleAdminUnlock(whId, id) {
   if (!b) return;
   const gid = deriveGroupKey(b);
   const newVal = !b.adminUnlocked;
-  const ts = new Date().toISOString();
   (warehouseData[whId]?.bookings || []).forEach(x => {
     if (deriveGroupKey(x) === gid) {
       x.adminUnlocked = newVal;
-      x.statusUpdatedAt = ts;
       upsertBookingToApi(whId, x);
     }
   });
