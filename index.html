@@ -934,9 +934,11 @@ async function loadWarehouseDataFromApi() {
 
     // Ensure base structure
     for (let whId in WAREHOUSES) {
-      warehouseData[whId] = warehouseData[whId] || { bookings: [], blockedSlots: [] };
+      warehouseData[whId] = warehouseData[whId] || { bookings: [], blockedSlots: [], slotCapacityOverrides: {} };
       warehouseData[whId].bookings = [];
       warehouseData[whId].blockedSlots = [];
+      // IMPORTANT: reset overrides on each load so deletes fall back to default for everyone
+      warehouseData[whId].slotCapacityOverrides = {};
     }
 
     function normalizeDate(v) {
@@ -3415,10 +3417,11 @@ document.getElementById('whDate').value = today();
     return;
   }
 
-  try { await loadUsersFromApi(); } catch(e) {}
+  // Try remote users first, but DO NOT block restore if it fails.
+  try { await withTimeout(loadUsersFromApi(), 8000); } catch(e) {}
 
   if (st.role === 'warehouse') {
-    const u = getWarehouseUsersForLogin().find(x => x.username === st.username);
+    const u = getWarehouseUsersForLogin().find(x => x.username === st.username) || loadWarehouseUsers().find(x => x.username === st.username);
     if (u) {
       applyWarehouseLogin(u);
       if (st.pageId) switchPage(st.pageId);
@@ -3428,7 +3431,7 @@ document.getElementById('whDate').value = today();
     }
   }
   if (st.role === 'supplier') {
-    const u = getSuppliersForLogin().find(x => x.username === st.username);
+    const u = getSuppliersForLogin().find(x => x.username === st.username) || suppliers.find(x => x.username === st.username);
     if (u) {
       applySupplierLogin(u);
       if (st.pageId) switchPage(st.pageId);
