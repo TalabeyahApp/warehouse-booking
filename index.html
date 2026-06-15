@@ -563,7 +563,7 @@ function closeSignupModal(){
         <div class="form-group"><label>اسم السائق</label><input type="text" id="supDriver" placeholder="محمد أحمد"></div>
       </div>
       <div class="form-row-3">
-        <div class="form-group"><label>نوع العربية <span style="color:red">*</span></label><select id="supTruckType">
+        <div class="form-group"><label>نوع ��لعربية <span style="color:red">*</span></label><select id="supTruckType">
           <option value="">اختر...</option>
           <option>دبابة نص حمولة</option>
           <option>دبابة حمولة كاملة</option>
@@ -838,6 +838,22 @@ function fmtCap(n) {
   if (n === null || n === undefined) return '';
   let x = Math.round(n * 2) / 2;
   return (x % 1 === 0) ? String(x) : String(x).replace('.5', '.5');
+}
+
+// Supplier admin helper:
+// To create another supplier admin, add a column in Suppliers sheet named "isAdmin"
+// and set it to TRUE / 1 / yes for that user.
+function isSupplierAdminUser(u) {
+  try {
+    if (!u) return false;
+    if (String(u.username || '').trim() === 'supplier_admin') return true;
+    const v = u.isAdmin;
+    if (v === true) return true;
+    const s = String(v || '').trim().toLowerCase();
+    return (s === '1' || s === 'true' || s === 'yes' || s === 'y');
+  } catch(e) {
+    return false;
+  }
 }
 
 // Truck type weights (capacity consumption)
@@ -1826,7 +1842,7 @@ function renderMyBookings() {
   let fromStr = (document.getElementById('myBookingsFrom')?.value || '').trim();
   let toStr = (document.getElementById('myBookingsTo')?.value || '').trim();
   let supplierFilter = (document.getElementById('myBookingsSupplier')?.value || '').trim().toLowerCase();
-  const isSupplierAdmin = (currentSupplierData.username === 'supplier_admin');
+  const isSupplierAdmin = isSupplierAdminUser(currentSupplierData);
   // Supplier name used in bookings is the company name
   let supplierName = (currentSupplierData.company || document.getElementById('supName')?.value || '').trim();
   let all = [];
@@ -1959,7 +1975,7 @@ function supplierCanSetArrivalForGroup(groupId) {
     const parts = (warehouseData[whId]?.bookings || []).filter(b => deriveGroupKey(b) === gid);
     if (!parts.length) continue;
     // supplier must match (unless supplier_admin)
-    const isSupplierAdmin = (currentSupplierData && currentSupplierData.username === 'supplier_admin');
+    const isSupplierAdmin = isSupplierAdminUser(currentSupplierData);
     if (!isSupplierAdmin) {
       const supplierName = (currentSupplierData?.company || '').trim();
       if (!parts.every(p => (p.supplier || '').trim() === supplierName)) continue;
@@ -2050,7 +2066,7 @@ function pickSlot(el, time) {
   
   let date = document.getElementById('supDate').value;
   // Non-admin suppliers cannot book on the same day (show message on button)
-  if (currentSupplierData && currentSupplierData.username !== 'supplier_admin') {
+  if (currentSupplierData && !isSupplierAdminUser(currentSupplierData)) {
     if (date === today()) {
       btn.disabled = true;
       btn.textContent = 'لا يمكن الحجز فى نفس اليوم حاول الحجز فى يوم اخر';
@@ -2092,7 +2108,7 @@ function submitBooking() {
   
   let supplier = document.getElementById('supName').value.trim();
   // supplier_admin can book for any supplier name that exists in Google Sheet (Suppliers tab)
-  if (currentSupplierData.username === 'supplier_admin') {
+  if (isSupplierAdminUser(currentSupplierData)) {
     if (!supplier) { showAlert('bookAlert', 'يرجى كتابة اسم المورد', 'error'); return; }
     const list = Array.isArray(remoteSuppliers) ? remoteSuppliers : [];
     const ok = list.some(s => String(s.company || '').trim().toLowerCase() === supplier.toLowerCase());
@@ -2115,7 +2131,7 @@ function submitBooking() {
   let whId = document.getElementById('bookingWarehouseSelect').value;
 
   // Non-admin suppliers cannot book on the same day
-  if (currentSupplierData.username !== 'supplier_admin') {
+  if (!isSupplierAdminUser(currentSupplierData)) {
     if (date === today()) {
       showAlert('bookAlert', 'لا يمكن الحجز فى نفس اليوم حاول الحجز فى يوم اخر', 'error');
       return;
@@ -2123,7 +2139,7 @@ function submitBooking() {
   }
 
   // One booking per supplier per day (except supplier_admin)
-  if (currentSupplierData.username !== 'supplier_admin') {
+  if (!isSupplierAdminUser(currentSupplierData)) {
     if (supplierHasBookingOnDate(supplier, date)) {
       showAlert('bookAlert', 'غير مسموح بأكثر من حجز في نفس اليوم.', 'error');
       return;
@@ -3015,7 +3031,7 @@ function applySupplierLogin(match) {
   currentRole = 'supplier';
   currentSupplierData = match;
   document.getElementById('topbarNav').innerHTML = `<button class="tab-btn active" onclick="switchPage('supplier')">🚚 بوابة المورد</button>`;
-  const isSupplierAdmin = (match.username === 'supplier_admin');
+  const isSupplierAdmin = isSupplierAdminUser(match);
   document.getElementById('userPillLabel').textContent = isSupplierAdmin ? 'ادمن المورد' : (match.company || '—');
   const supNameEl = document.getElementById('supName');
   if (supNameEl) {
@@ -3041,7 +3057,7 @@ function applySupplierLogin(match) {
   // supplier filter visible only for supplier_admin
   try {
     const supF = document.getElementById('myBookingsSupplier');
-    if (supF) supF.style.display = (match.username === 'supplier_admin') ? 'block' : 'none';
+    if (supF) supF.style.display = isSupplierAdminUser(match) ? 'block' : 'none';
   } catch(e) {}
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('topbar').style.display = 'flex';
