@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Google Apps Script API (Sheets backend) -->
 <script>
-  const API_URL = "https://script.google.com/macros/s/AKfycbyth5VG2rwWY_Czg-elQLVgQ8_f8Ha5E6hkh_f-xE2GzI3S4hGnnvvw2QH6dpGF4-e-JQ/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbxQdTlYfYmKHFqM6Lz1VmgcySQIsRvmIGok6_RnxXgqWZQyfnm_mt4uV__0vZWmeRuhsw/exec";
   async function apiGet(action, params = {}) {
     const url = new URL(API_URL);
     url.searchParams.set('action', action);
@@ -728,7 +728,7 @@ function closeSignupModal(){
     <div class="report-card">
       <div class="report-card-head">
         <div>
-          <div class="report-card-title">🚛 تقرير نوع العربية</div>
+          <div class="report-card-title">🚛 تقرير نوع الع��بية</div>
           <div class="report-card-sub">ملخص حسب نوع العربية خلال فترة</div>
         </div>
       </div>
@@ -1620,7 +1620,7 @@ function editSlotCapacity(date, time) {
     // Sync delete to Sheets so all users fall back to default capacity
     try {
       showLoader('جاري التحميل...');
-      apiPost('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` })
+      apiGet('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` })
         .then(() => refreshDataWithLoaderSafe().then(() => renderWarehouse()))
         .finally(() => hideLoader());
     } catch(e) {}
@@ -1637,7 +1637,7 @@ function editSlotCapacity(date, time) {
   // Sync to Sheets (shared)
   try {
     showLoader('جاري التحميل...');
-    apiPost('upsertSlotCapacityOverride', {
+    apiGet('upsertSlotCapacityOverride', {
       id: `${whId}|${date}|${time}`,
       warehouseId: whId,
       date,
