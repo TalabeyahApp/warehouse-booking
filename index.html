@@ -655,7 +655,7 @@ function closeSignupModal(){
         </select>
       </div>
       <div class="report-kpis">
-        <div class="kpi"><div class="v" id="rBookingsKpiTotal">0</div><div class="l">إجمالي</div></div>
+        <div class="kpi"><div class="v" id="rBookingsKpiTotal">0</div><div class="l">إجمالي الحجوزات</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiPending">0</div><div class="l">معلق</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiApproved">0</div><div class="l">مؤكد</div></div>
         <div class="kpi"><div class="v" id="rBookingsKpiCompleted">0</div><div class="l">مكتمل</div></div>
@@ -683,7 +683,7 @@ function closeSignupModal(){
       <div class="report-filters"></div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>نوع البضاعة</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
+          <thead><tr><th>نوع البضاعة</th><th>عدد العربيات</th><th>إجمالي الحجوزات</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
           <tbody id="rGoodsPreview"></tbody>
         </table>
       </div>
@@ -701,7 +701,7 @@ function closeSignupModal(){
       <div class="report-filters"></div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>المورد</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
+          <thead><tr><th>المورد</th><th>عدد العربيات</th><th>إجمالي الحجوزات</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
           <tbody id="rSupPreview"></tbody>
         </table>
       </div>
@@ -719,7 +719,7 @@ function closeSignupModal(){
       <div class="report-filters"></div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>نوع العربية</th><th>عدد العربيات</th><th>إجمالي</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
+          <thead><tr><th>نوع العربية</th><th>عدد العربيات</th><th>إجمالي الحجوزات</th><th>معلق</th><th>مؤكد</th><th>مكتمل</th><th>لم يتم التسليم</th><th>ملغي</th><th>مرفوض</th></tr></thead>
           <tbody id="rTruckPreview"></tbody>
         </table>
       </div>
@@ -2166,9 +2166,16 @@ function toggleAdminUnlock(whId, id) {
   if (currentWarehouseAccess !== 'all') return;
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
-  b.adminUnlocked = !b.adminUnlocked;
-  b.statusUpdatedAt = new Date().toISOString();
-  upsertBookingToApi(whId, b);
+  const gid = deriveGroupKey(b);
+  const newVal = !b.adminUnlocked;
+  const ts = new Date().toISOString();
+  (warehouseData[whId]?.bookings || []).forEach(x => {
+    if (deriveGroupKey(x) === gid) {
+      x.adminUnlocked = newVal;
+      x.statusUpdatedAt = ts;
+      upsertBookingToApi(whId, x);
+    }
+  });
   saveWarehouseData(whId);
   renderBookingsTable();
 }
