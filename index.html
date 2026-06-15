@@ -910,6 +910,9 @@ async function loadWarehouseDataFromApi() {
     // Load blocked slots
     const blRes = await apiGet('listBlockedSlots');
     const blocked = (blRes && blRes.ok && Array.isArray(blRes.data)) ? blRes.data : [];
+    // Load slot capacity overrides (shared across devices)
+    const capRes = await apiGet('listSlotCapacityOverrides');
+    const caps = (capRes && capRes.ok && Array.isArray(capRes.data)) ? capRes.data : [];
 
     // Ensure base structure
     for (let whId in WAREHOUSES) {
@@ -999,10 +1002,24 @@ async function loadWarehouseDataFromApi() {
       warehouseData[whId].blockedSlots.push(getSlotKey(date, time));
     });
 
+    // capacity overrides
+    (caps || []).forEach(x => {
+      const whId = x.warehouseId || x.warehouse || x.warehouseid || x.warehouseId;
+      const date = x.date || '';
+      const time = x.time || '';
+      const cap = x.capacity;
+      if (!whId || !warehouseData[whId] || !date || !time) return;
+      const n = (cap === '' || cap === null || cap === undefined) ? null : Number(cap);
+      if (!Number.isFinite(n) || n < 0) return;
+      warehouseData[whId].slotCapacityOverrides = warehouseData[whId].slotCapacityOverrides || {};
+      warehouseData[whId].slotCapacityOverrides[getSlotKey(date, time)] = n;
+    });
+
     // Optional: still cache locally (offline fallback)
     for (let whId in WAREHOUSES) {
       localStorage.setItem(`whBookings_${whId}`, JSON.stringify(warehouseData[whId].bookings));
       localStorage.setItem(`whBlocked_${whId}`, JSON.stringify(warehouseData[whId].blockedSlots));
+      localStorage.setItem(`whSlotCaps_${whId}`, JSON.stringify(warehouseData[whId].slotCapacityOverrides || {}));
     }
   } catch (e) {
     console.error(e);
@@ -1584,6 +1601,10 @@ function editSlotCapacity(date, time) {
   if (!v) {
     delete warehouseData[whId].slotCapacityOverrides[key];
     saveWarehouseData(whId);
+    // Sync delete to Sheets so all users fall back to default capacity
+    try {
+      apiPost('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` });
+    } catch(e) {}
     renderWarehouse();
     return;
   }
@@ -1594,6 +1615,17 @@ function editSlotCapacity(date, time) {
   }
   warehouseData[whId].slotCapacityOverrides[key] = n;
   saveWarehouseData(whId);
+  // Sync to Sheets (shared)
+  try {
+    apiPost('upsertSlotCapacityOverride', {
+      id: `${whId}|${date}|${time}`,
+      warehouseId: whId,
+      date,
+      time,
+      capacity: n,
+      updatedAt: nowIso(),
+    });
+  } catch(e) {}
   renderWarehouse();
 }
 
