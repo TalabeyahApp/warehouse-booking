@@ -764,7 +764,7 @@ const WAREHOUSES = {
 // Used to enable "وصول" for suppliers only when near the warehouse.
 const WAREHOUSE_LOCATIONS = {
   warehouse1: { lat: 30.040545790106176, lng: 31.346015064418015 },
-  warehouse2: { lat: null, lng: null },
+  warehouse2: { lat: 29.95638888888889, lng: 31.163166666666665 },
   warehouse3: { lat: null, lng: null },
   warehouse4: { lat: null, lng: null },
 };
@@ -1702,6 +1702,7 @@ function changeDay(n) {
 }
 
 function toggleBlock(date, time) {
+  if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let whId = currentWarehouse;
   // Admin-only: only users with access "all" can open/close slots
   if (currentWarehouseAccess !== 'all') {
@@ -1725,6 +1726,7 @@ function toggleBlock(date, time) {
 }
 
 function editSlotCapacity(date, time) {
+  if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let whId = currentWarehouse;
   if (currentWarehouseAccess !== 'all') {
     alert('غير مسموح: هذا الإجراء للادمن فقط');
@@ -1775,6 +1777,7 @@ function editSlotCapacity(date, time) {
 }
 
 function cancelBooking(whId, id) {
+  if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   if(confirm('هل أنت متأكد من إلغاء هذا ال��جز؟')){ 
     let b = warehouseData[whId].bookings.find(b=>b.id===id);
     if(b){
@@ -1796,6 +1799,7 @@ function cancelBooking(whId, id) {
 }
 
 function completeBooking(whId, id) { 
+  if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let b = warehouseData[whId].bookings.find(b=>b.id===id); 
   if(!b) return;
   if (!b.checkInTime || !b.checkOutTime) {
@@ -2483,6 +2487,7 @@ function renderBookingsTable() {
 }
 
 function setArrivalWarehouse(whId, id) {
+  if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
   let gid = deriveGroupKey(b);
@@ -2515,6 +2520,7 @@ function toggleAdminUnlock(whId, id) {
 }
 
 function markNotDelivered(whId, id) {
+  if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
   let gid = deriveGroupKey(b);
@@ -2531,6 +2537,7 @@ function markNotDelivered(whId, id) {
 }
 
 function checkInBooking(whId, id) {
+  if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
   // Only set if not set yet
@@ -2543,6 +2550,7 @@ function checkInBooking(whId, id) {
 }
 
 function checkOutBooking(whId, id) {
+  if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
   if (!b.checkInTime) {
@@ -2739,6 +2747,7 @@ function renderUsersModal() {
         <select class="date-input" style="width:140px" data-user-idx="${idx}" data-field="access" ${isAdmin?'disabled':''}>
           <option value="all">كل المخازن</option>
           <option value="single">مخزن واحد</option>
+          <option value="view">عرض فقط</option>
         </select>
       </td>
       <td>
@@ -2901,6 +2910,7 @@ function openUsersModal() {
 }
 
 function saveUsersFromModal() {
+  if (isWarehouseReadOnly()) { alert('⚠️ حساب عرض فقط: لا يمكن التعديل'); return; }
   let users = loadWarehouseUsers();
   let inputs = Array.from(document.querySelectorAll('#usersTbody [data-user-idx]'));
   inputs.forEach(inp => {
@@ -2964,9 +2974,13 @@ function saveUsersFromModal() {
   document.getElementById('usersModal')?.classList.remove('open');
 }
 
-let currentWarehouseAccess = 'all'; // 'all' | 'single'
+let currentWarehouseAccess = 'all'; // 'all' | 'single' | 'view'
 let currentRole = null;
 const SESSION_STORAGE_KEY = 'sessionState';
+
+function isWarehouseReadOnly() {
+  return currentRole === 'warehouse' && currentWarehouseAccess === 'view';
+}
 
 // ==================== AUTO SIGN-OUT (IDLE) ====================
 const IDLE_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour
