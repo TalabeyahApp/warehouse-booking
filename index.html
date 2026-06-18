@@ -2885,7 +2885,7 @@ function deleteWarehouseUserRow(idx) {
   users.splice(idx, 1);
   saveWarehouseUsers(users);
   // Sync delete to Google Sheets (best-effort)
-  apiPost('deleteWarehouseUser', { username: u.username }).catch(()=>{});
+  apiGet('deleteWarehouseUser', { username: u.username }).catch(()=>{});
   renderUsersModal();
 }
 
@@ -3014,7 +3014,7 @@ function openUsersModal() {
   });
 }
 
-function saveUsersFromModal() {
+async function saveUsersFromModal() {
   if (isWarehouseReadOnly()) { alert('⚠️ حساب عرض فقط: لا يمكن التعديل'); return; }
   let users = loadWarehouseUsers();
   let inputs = Array.from(document.querySelectorAll('#usersTbody [data-user-idx]'));
@@ -3056,27 +3056,29 @@ function saveUsersFromModal() {
 
   saveWarehouseUsers(users);
 
-  // Sync to Google Sheets
-  Promise.resolve().then(async () => {
-    try {
-      for (let u of users) {
-        await apiPost('upsertWarehouseUser', {
-          username: u.username,
-          password: u.password,
-          label: u.label || '',
-          access: u.access,
-          warehouseId: u.warehouseId || '',
-          updatedAt: nowIso(),
-        });
-      }
-      await loadUsersFromApi();
-    } catch (e) {
-      console.error(e);
+  // Sync to Google Sheets via GET (avoids Apps Script POST redirect issue)
+  try {
+    showLoader('جاري الحفظ...');
+    for (let u of users) {
+      const res = await apiGet('upsertWarehouseUser', {
+        username: u.username,
+        password: u.password,
+        label: u.label || '',
+        access: u.access,
+        warehouseId: u.warehouseId || '',
+        updatedAt: nowIso(),
+      });
+      if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save warehouse user');
     }
-  });
-
-  alert('✅ تم حفظ المستخدمين');
-  document.getElementById('usersModal')?.classList.remove('open');
+    await loadUsersFromApi();
+    alert('✅ تم حفظ مستخدمي المخازن في Google Sheet');
+    document.getElementById('usersModal')?.classList.remove('open');
+  } catch (e) {
+    console.error(e);
+    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ في Google Sheet. تأكد من رابط Apps Script والأعمدة.');
+  } finally {
+    hideLoader();
+  }
 }
 
 let currentWarehouseAccess = 'all'; // 'all' | 'single' | 'view' | 'single_view'
