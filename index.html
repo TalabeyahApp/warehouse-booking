@@ -2847,6 +2847,7 @@ function renderUsersModal() {
         <select class="date-input" style="width:140px" data-user-idx="${idx}" data-field="access" ${isAdmin?'disabled':''}>
           <option value="all">كل المخازن</option>
           <option value="single">مخزن واحد</option>
+          <option value="single_view">عرض مخزن واحد فقط</option>
           <option value="view">عرض كل المخازن فقط</option>
         </select>
       </td>
@@ -3027,7 +3028,7 @@ function saveUsersFromModal() {
 
   // Normalize / enforce rules
   users = users.map(u => {
-    let access = (u.access === 'all') ? 'all' : ((u.access === 'view') ? 'view' : 'single');
+    let access = (u.access === 'all') ? 'all' : ((u.access === 'view') ? 'view' : ((u.access === 'single_view') ? 'single_view' : 'single'));
     let out = { ...u, access };
     if (access === 'all' || access === 'view') {
       delete out.warehouseId;
@@ -3047,7 +3048,7 @@ function saveUsersFromModal() {
 
   // Ensure single-access users have valid warehouseId
   for (let u of users) {
-    if (u.access === 'single' && (!u.warehouseId || !WAREHOUSES[u.warehouseId])) {
+    if ((u.access === 'single' || u.access === 'single_view') && (!u.warehouseId || !WAREHOUSES[u.warehouseId])) {
       alert('⚠️ يرجى اختيار مخزن صحيح لكل مستخدم');
       return;
     }
@@ -3078,12 +3079,12 @@ function saveUsersFromModal() {
   document.getElementById('usersModal')?.classList.remove('open');
 }
 
-let currentWarehouseAccess = 'all'; // 'all' | 'single' | 'view'
+let currentWarehouseAccess = 'all'; // 'all' | 'single' | 'view' | 'single_view'
 let currentRole = null;
 const SESSION_STORAGE_KEY = 'sessionState';
 
 function isWarehouseReadOnly() {
-  return currentRole === 'warehouse' && currentWarehouseAccess === 'view';
+  return currentRole === 'warehouse' && (currentWarehouseAccess === 'view' || currentWarehouseAccess === 'single_view');
 }
 
 // ==================== AUTO SIGN-OUT (IDLE) ====================
@@ -3135,11 +3136,11 @@ function applyWarehouseLogin(match) {
   `;
   // Show user label + warehouse name (when applicable)
   let whNameForPill = '';
-  if (currentWarehouseAccess === 'single' && match.warehouseId && WAREHOUSES[match.warehouseId]) {
+  if ((currentWarehouseAccess === 'single' || currentWarehouseAccess === 'single_view') && match.warehouseId && WAREHOUSES[match.warehouseId]) {
     whNameForPill = WAREHOUSES[match.warehouseId].name;
   }
   // Format: "الادمن - طلبية - مدينة نصر" for admin, otherwise "مسؤول - طلبية - مدينة نصر"
-  const roleLabel = (currentWarehouseAccess === 'all') ? 'الادمن' : (currentWarehouseAccess === 'view' ? 'عرض فقط' : 'مسؤول');
+  const roleLabel = (currentWarehouseAccess === 'all') ? 'الادمن' : ((currentWarehouseAccess === 'view' || currentWarehouseAccess === 'single_view') ? 'عرض فقط' : 'مسؤول');
   document.getElementById('userPillLabel').textContent = roleLabel + (whNameForPill ? ` - ${whNameForPill}` : '');
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('topbar').style.display = 'flex';
@@ -3150,7 +3151,7 @@ function applyWarehouseLogin(match) {
   try { document.getElementById('filterDate').value = today(); } catch(e) {}
 
   // Restrict warehouse selection for non-admin users
-  if (currentWarehouseAccess === 'single' && match.warehouseId) {
+  if ((currentWarehouseAccess === 'single' || currentWarehouseAccess === 'single_view') && match.warehouseId) {
     currentWarehouse = match.warehouseId;
     let sel = document.getElementById('selectedWarehouse');
     if (sel) {
