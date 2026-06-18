@@ -3143,7 +3143,7 @@ function applyWarehouseLogin(match) {
   }
   // Format: "الادمن - طلبية - مدينة نصر" for admin, otherwise "مسؤول - طلبية - مدينة نصر"
   const roleLabel = (currentWarehouseAccess === 'all') ? 'الادمن' : ((currentWarehouseAccess === 'view' || currentWarehouseAccess === 'single_view') ? 'عرض فقط' : 'مسؤول');
-  document.getElementById('userPillLabel').textContent = roleLabel + (whNameForPill ? ` - ${whNameForPill}` : '');
+  document.getElementById('userPillLabel').textContent = (match.username || '—') + (whNameForPill ? ` - ${whNameForPill}` : '');
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('topbar').style.display = 'flex';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -3198,7 +3198,7 @@ function applySupplierLogin(match) {
   currentSupplierData = match;
   document.getElementById('topbarNav').innerHTML = `<button class="tab-btn active" onclick="switchPage('supplier')">🚚 بوابة المورد</button>`;
   const isSupplierAdmin = isSupplierAdminUser(match);
-  document.getElementById('userPillLabel').textContent = isSupplierAdmin ? 'ادمن المورد' : (match.company || '—');
+  document.getElementById('userPillLabel').textContent = match.username || '—';
   const supCodeGroup = document.getElementById('supCodeGroup');
   const supCodeEl = document.getElementById('supCode');
   const supNameSelect = document.getElementById('supNameSelect');
