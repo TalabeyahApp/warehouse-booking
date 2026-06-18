@@ -214,6 +214,7 @@ body.boot-loading #loaderOverlay{display:flex !important}
 .slot-pick.selected{border-color:var(--accent);background:var(--accent);color:#fff}
 .slot-pick.selected .sp-time{color:#fff}.slot-pick.selected .sp-cap{color:rgba(255,255,255,.75)}
 .slot-pick.taken{background:#f5f5f5;border-color:#ddd;cursor:not-allowed;opacity:.55}
+.slot-pick.dimmed{background:#f5f5f5;border-color:#ddd;cursor:not-allowed;opacity:.45;filter:grayscale(1)}
 .slot-pick.full{background:var(--red-light);border-color:var(--red);opacity:.7}
 .slot-pick.warning{background:var(--amber-light);border-color:var(--amber)}
 .sp-time{font-size:13px;font-weight:700;font-family:var(--mono)}
@@ -439,7 +440,7 @@ function closeSignupModal(){
     <div style="overflow:auto;max-height:320px">
       <table class="preview-table" style="margin-top:0">
         <thead>
-          <tr><th>المستخدم</th><th>البريد</th><th>كلمة المرور</th><th>اسم الشركة</th><th>المخزن الافتراضي</th><th>ادمن؟</th><th></th></tr>
+          <tr><th>المستخدم</th><th>البريد</th><th>كلمة المرور</th><th>كود المورد</th><th>اسم الشركة</th><th>المخزن الافتراضي</th><th>ادمن؟</th><th></th></tr>
         </thead>
         <tbody id="supplierUsersTbody"></tbody>
       </table>
@@ -536,6 +537,7 @@ function closeSignupModal(){
   <div class="booking-layout">
     <div class="panel">
       <h2>📅 احجز موعد جديد</h2>
+      <div class="form-group" id="supCodeGroup" style="display:none"><label>كود المورد</label><input type="text" id="supCode" placeholder="اكتب كود المورد"></div>
       <div class="form-group"><label>اسم المورد / الشركة</label><input type="text" id="supName" readonly style="background:#f0f0ec" placeholder="اكتب اسم المورد"></div>
       <div class="form-row">
         <div class="form-group"><label>رقم الأوردر</label><input type="text" id="supOrder" placeholder="PO-12345"></div>
@@ -810,18 +812,26 @@ async function isInsideWarehouseGeofence(warehouseId) {
 }
 
 const SLOTS_PER_DAY = [
-  '09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00'
+  '09:00','13:00'
 ];
 
-// Slot capacity: default 6, but 11:00 and 12:00 are 7
+// Slot capacity defaults
 // Admin can override capacity per (warehouse,date,time)
 function baseSlotCapacity(time) {
-  // Default capacities (can be overridden per date/time from Sheet)
-  // 09:00..12:00 => 7
-  // 13:00 => 4
-  if (time === '09:00' || time === '10:00' || time === '11:00' || time === '12:00') return 7;
-  if (time === '13:00') return 4;
-  return 6;
+  // 09:00-13:00 => 25 cars
+  // 13:00-16:00 => 25 cars
+  return 25;
+}
+
+function slotEndTime(time) {
+  if (time === '09:00') return '13:00';
+  if (time === '13:00') return '16:00';
+  return time;
+}
+
+function slotDisplayLabel(time) {
+  const end = slotEndTime(time);
+  return end && end !== time ? `${time} - ${end}` : time;
 }
 
 function slotCapacity(whId, date, time) {
@@ -940,8 +950,10 @@ async function loadUsersFromApi() {
         username: x.username || '',
         email: x.email || '',
         password: x.password || '',
+        supplierCode: x.supplierCode || x.suppliercode || x.code || '',
         company: x.company || '',
         defaultWarehouse: x.defaultWarehouse || x.defaultwarehouse || 'warehouse1',
+        isAdmin: (String(x.isAdmin || x.isadmin || '').toLowerCase() === 'true') || (x.isAdmin === true) || (x.isadmin === true),
         updatedAt: x.updatedAt || x.updatedat || '',
         createdAt: x.createdAt || x.createdat || '',
       }));
@@ -969,6 +981,24 @@ function getSuppliersForLogin() {
     return suppliers;
   }
   return suppliers;
+}
+
+function findSupplierByCode(code) {
+  const c = String(code || '').trim().toLowerCase();
+  if (!c) return null;
+  const list = getSuppliersForLogin();
+  return list.find(s => String(s.supplierCode || s.suppliercode || s.code || '').trim().toLowerCase() === c) || null;
+}
+
+function fillSupplierNameFromCode() {
+  try {
+    if (!isSupplierAdminUser(currentSupplierData)) return;
+    const code = document.getElementById('supCode')?.value || '';
+    const supNameEl = document.getElementById('supName');
+    if (!supNameEl) return;
+    const match = findSupplierByCode(code);
+    supNameEl.value = match ? (match.company || '') : '';
+  } catch(e) {}
 }
 
 function normalizePassword(v) {
@@ -1514,10 +1544,12 @@ function getSlotAvailableCapacity(whId, date, time) {
 function isPastSlot(dateStr, timeStr) {
   if (!dateStr || !timeStr) return false;
   // dateStr: YYYY-MM-DD, timeStr: HH:MM
+  // For range slots, close after the slot end time (e.g. 09:00-13:00 closes after 13:00)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   if (!/^\d{2}:\d{2}$/.test(timeStr)) return false;
   const [y,m,d] = dateStr.split('-').map(n => parseInt(n,10));
-  const [hh,mm] = timeStr.split(':').map(n => parseInt(n,10));
+  const endTime = slotEndTime(timeStr) || timeStr;
+  const [hh,mm] = endTime.split(':').map(n => parseInt(n,10));
   const slot = new Date(y, (m-1), d, hh, mm, 0, 0);
   return Date.now() > slot.getTime();
 }
@@ -1676,7 +1708,7 @@ function renderWarehouse() {
     let adminBlockBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-details" type="button" onclick="toggleBlock('${date}','${time}')">${st === 'blocked' ? 'فتح' : 'قفل'}</button>` : '';
 
     return `<div class="slot-card ${st === 'warning' ? 'available' : st}" ${currentWarehouseAccess === 'all' ? '' : ''}>
-      <div class="slot-time">${time}</div>
+      <div class="slot-time">${slotDisplayLabel(time)}</div>
       <div class="slot-status">${label}</div>
       <div class="slot-capacity ${capacityClass}">🚛 ${capacityText}</div>
       ${info}
@@ -1841,6 +1873,16 @@ function renderSupplierSlots() {
   warningMsg.classList.remove('show');
   errorMsg.classList.remove('show');
 
+  const sameDayBlockedForNormalSupplier = !!(
+    currentSupplierData &&
+    !isSupplierAdminUser(currentSupplierData) &&
+    date === today()
+  );
+  if (sameDayBlockedForNormalSupplier) {
+    btn.disabled = true;
+    btn.textContent = 'لا يمكن الحجز فى نفس اليوم حاول الحجز فى يوم اخر';
+  }
+
   let grid = document.getElementById('supplierSlots');
   grid.innerHTML = SLOTS_PER_DAY.map(time => {
     let st = slotStatus(whId, date, time);
@@ -1868,9 +1910,15 @@ function renderSupplierSlots() {
       cap = `✅ متاح (${fmtCap(Math.max(available,0))} عربة)`;
     }
     
+    if (sameDayBlockedForNormalSupplier) {
+      taken = true;
+      extraClass = 'dimmed';
+      cap = 'لا يمكن الحجز فى نفس اليوم';
+    }
+
     let onclickAttr = (!taken && st !== 'full') ? `onclick="pickSlot(this,'${time}')"` : '';
     return `<div class="slot-pick ${taken?'taken':''} ${extraClass}" data-time="${time}" ${onclickAttr}>
-      <div class="sp-time">${time}</div>
+      <div class="sp-time">${slotDisplayLabel(time)}</div>
       <div class="sp-cap">${cap}</div>
       <div class="sp-capacity ${extraClass}">🚛 سعة ${slotCapacity(whId, date, time)}</div>
     </div>`;
@@ -1925,7 +1973,7 @@ function renderMyBookings() {
     let whName = WAREHOUSES[parts[0].warehouseId]?.name || '';
     let date = parts[0].date;
     let timeRange = parts.map(p=>p.time).filter(Boolean);
-    let timeLabel = timeRange.length ? (timeRange[0] + (timeRange.length>1 ? ' +'+(timeRange.length-1) : '')) : '-';
+    let timeLabel = timeRange.length ? (slotDisplayLabel(timeRange[0]) + (timeRange.length>1 ? ' +'+(timeRange.length-1) : '')) : '-';
     let trucks = parts.reduce((s,p)=>s + (parseFloat(p.truckCount)||0), 0);
     let cartons = parts.reduce((s,p)=>s + (parseInt(p.cartons)||0), 0);
     let status = parts.some(p=>p.status==='cancelled') ? 'cancelled' : (parts.some(p=>p.status==='not_delivered') ? 'not_delivered' : (parts.some(p=>p.status==='completed') ? 'completed' : (parts.some(p=>p.status==='approved') ? 'approved' : (parts[0].status||''))));
@@ -2461,7 +2509,7 @@ function renderBookingsTable() {
     <td>${b.supplier}</td>
     <td>${b.orderNum}</td>
     <td>${formatDate(b.date)}</td>
-    <td>${b.time}</td>
+    <td>${slotDisplayLabel(b.time)}</td>
     <td>${b.goodsType}</td>
     <td>${b.truckType||'-'}</td>
     <td>${b.truckCount||'-'}</td>
@@ -2478,7 +2526,7 @@ function renderBookingsTable() {
       <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="checkInBooking('${b.warehouseId}','${b.id}')">دخول</button>
       <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="checkOutBooking('${b.warehouseId}','${b.id}')">خروج</button>
       <button class="btn-sm btn-cancel" ${rowLocked ? 'disabled' : disAttr} ${rowLocked ? 'style="opacity:.45;cursor:not-allowed"' : disStyle} onclick="markNotDelivered('${b.warehouseId}','${b.id}')">لم يتم التسليم</button>
-      <button class="btn-sm btn-complete" ${completeDis} ${completeStyle} onclick="completeBooking('${b.warehouseId}','${b.id}')">مكت��ل</button>
+      ${currentWarehouseAccess === 'all' ? `<button class=\"btn-sm btn-complete\" ${completeDis} ${completeStyle} onclick=\"completeBooking('${b.warehouseId}','${b.id}')\">مكتمل</button>` : ''}
       <button class="btn-sm btn-cancel" ${rowLocked ? 'disabled' : disAttr} ${rowLocked ? 'style="opacity:.45;cursor:not-allowed"' : disStyle} onclick="cancelBooking('${b.warehouseId}','${b.id}')">إلغاء</button>
       ${currentWarehouseAccess === 'all' ? `<button class=\"btn-sm btn-details\" type=\"button\" onclick=\"toggleAdminUnlock('${b.warehouseId}','${b.id}')\">${b.adminUnlocked ? 'قفل' : 'فتح'}</button>` : ''}
     </div>
@@ -2540,6 +2588,10 @@ function checkInBooking(whId, id) {
   if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let b = warehouseData[whId]?.bookings?.find(x => x.id === id);
   if (!b) return;
+  if (!b.arrivalTime) {
+    alert('لا يمكن تسجيل وقت الدخول قبل تسجيل وقت الوصول');
+    return;
+  }
   // Only set if not set yet
   if (!b.checkInTime) b.checkInTime = new Date().toISOString();
   b.statusUpdatedAt = new Date().toISOString();
@@ -2584,7 +2636,7 @@ function openBookingModal(whId, id) {
     <div class="info-row"><span class="info-key">المخزن</span><span class="info-val">${WAREHOUSES[whId].name}</span></div>
     <div class="info-row"><span class="info-key">المورد</span><span class="info-val">${b.supplier}</span></div>
     <div class="info-row"><span class="info-key">رقم الأوردر</span><span class="info-val">${b.orderNum}</span></div>
-    <div class="info-row"><span class="info-key">التاريخ والوقت</span><span class="info-val">${formatDate(b.date)} ${b.time}</span></div>
+    <div class="info-row"><span class="info-key">التاريخ والوقت</span><span class="info-val">${formatDate(b.date)} ${slotDisplayLabel(b.time)}</span></div>
     <div class="info-row"><span class="info-key">نوع البضاعة</span><span class="info-val">${b.goodsType}</span></div>
     <div class="info-row"><span class="info-key">نوع العربية</span><span class="info-val">${b.truckType||'-'}</span></div>
     <div class="info-row"><span class="info-key">عدد العربيات</span><span class="info-val">${b.truckCount||'-'}</span></div>
@@ -2676,7 +2728,7 @@ function doResetPassword() {
   if (!newPass) { alert('يرجى إدخال كلمة مرور جديدة'); return; }
   if (newPass !== confirm) { alert('كلمة المرور غير متطابقة'); return; }
   let idx = suppliers.findIndex(s => s.username === username && (s.email||'').toLowerCase() === email);
-  if (idx === -1) { alert('لم يتم العثور على حساب مطابق'); return; }
+  if (idx === -1) { alert('لم يتم العثور ��لى حساب مطابق'); return; }
   suppliers[idx].password = newPass;
   suppliers[idx].updatedAt = new Date().toISOString();
   localStorage.setItem('suppliers', JSON.stringify(suppliers));
@@ -2806,6 +2858,7 @@ function renderSupplierUsersModal() {
       <td><input class="date-input" style="width:120px" type="text" value="${u.username || ''}" data-sup-idx="${idx}" data-field="username"></td>
       <td><input class="date-input" style="width:160px" type="email" value="${u.email || ''}" data-sup-idx="${idx}" data-field="email"></td>
       <td><input class="date-input" style="width:120px" type="text" value="${u.password || ''}" data-sup-idx="${idx}" data-field="password"></td>
+      <td><input class="date-input" style="width:120px" type="text" value="${u.supplierCode || ''}" data-sup-idx="${idx}" data-field="supplierCode"></td>
       <td><input class="date-input" style="width:160px" type="text" value="${u.company || ''}" data-sup-idx="${idx}" data-field="company"></td>
       <td>
         <select class="date-input" style="width:160px" data-sup-idx="${idx}" data-field="defaultWarehouse">
@@ -2836,7 +2889,7 @@ function openSupplierUsersModal() {
 
 function addSupplierUserRow() {
   let list = loadSupplierUsers();
-  list.push({ username: '', email: '', password: '', company: '', defaultWarehouse: 'warehouse1', createdAt: new Date().toISOString() });
+  list.push({ username: '', email: '', password: '', supplierCode: '', company: '', defaultWarehouse: 'warehouse1', isAdmin: false, createdAt: new Date().toISOString() });
   saveSupplierUsers(list);
   suppliers = loadSupplierUsers();
   renderSupplierUsersModal();
@@ -2886,6 +2939,7 @@ function saveSupplierUsersFromModal() {
           username: u.username,
           email: u.email,
           password: u.password,
+          supplierCode: u.supplierCode || '',
           company: u.company,
           defaultWarehouse: u.defaultWarehouse || 'warehouse1',
           isAdmin: u.isAdmin ? true : false,
@@ -3092,6 +3146,10 @@ function applySupplierLogin(match) {
   document.getElementById('topbarNav').innerHTML = `<button class="tab-btn active" onclick="switchPage('supplier')">🚚 بوابة المورد</button>`;
   const isSupplierAdmin = isSupplierAdminUser(match);
   document.getElementById('userPillLabel').textContent = isSupplierAdmin ? 'ادمن المورد' : (match.company || '—');
+  const supCodeGroup = document.getElementById('supCodeGroup');
+  const supCodeEl = document.getElementById('supCode');
+  if (supCodeGroup) supCodeGroup.style.display = isSupplierAdmin ? 'block' : 'none';
+  if (supCodeEl) supCodeEl.value = '';
   const supNameEl = document.getElementById('supName');
   if (supNameEl) {
     if (isSupplierAdmin) {
@@ -3236,6 +3294,7 @@ document.getElementById('supDate').onchange = () => { refreshDataWithLoader().th
 document.getElementById('myBookingsFrom').onchange = renderMyBookings;
 document.getElementById('myBookingsTo').onchange = renderMyBookings;
 document.getElementById('myBookingsSupplier').oninput = renderMyBookings;
+document.getElementById('supCode').oninput = fillSupplierNameFromCode;
 document.getElementById('supTruckCount').oninput = checkCapacity;
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
 document.getElementById('exportAllBtn').onclick = exportAllSheets;
