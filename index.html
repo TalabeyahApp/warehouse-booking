@@ -943,10 +943,23 @@ async function loadUsersFromApi() {
       apiGet('listWarehouseUsers'),
       apiGet('listSuppliers'),
     ]);
-    if (wRes && wRes.ok && Array.isArray(wRes.data)) remoteWarehouseUsers = wRes.data;
-    if (sRes && sRes.ok && Array.isArray(sRes.data)) remoteSuppliers = sRes.data;
-    // If supplier users exist remotely, use them for login
-    if (Array.isArray(remoteSuppliers) && remoteSuppliers.length) {
+    if (wRes && wRes.ok && Array.isArray(wRes.data)) {
+      remoteWarehouseUsers = wRes.data;
+      // Keep local modal data in sync with Google Sheet, including deleted rows
+      if (remoteWarehouseUsers.length) {
+        saveWarehouseUsers(remoteWarehouseUsers.map(u => ({
+          username: u.username || '',
+          password: u.password || '',
+          label: u.label || (u.access === 'all' ? 'الادمن' : 'مستخدم مخزن'),
+          access: u.access || 'single',
+          warehouseId: u.warehouseId || u.warehouseid || '',
+        })));
+      }
+    }
+    if (sRes && sRes.ok && Array.isArray(sRes.data)) {
+      remoteSuppliers = sRes.data;
+      // If supplier users exist remotely, use them for login and modal rendering.
+      // This also removes rows locally when they were deleted directly from Google Sheet.
       suppliers = remoteSuppliers.map(x => ({
         username: x.username || '',
         email: x.email || '',
@@ -958,6 +971,7 @@ async function loadUsersFromApi() {
         updatedAt: x.updatedAt || x.updatedat || '',
         createdAt: x.createdAt || x.createdat || '',
       }));
+      saveSupplierUsers(suppliers);
     }
   } catch (e) {
     console.error(e);
