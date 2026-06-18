@@ -159,28 +159,28 @@ body.boot-loading #loaderOverlay{display:flex !important}
 
 /* STATS ROW */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
-.stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:6px}
-.stat-val{font-size:26px;font-weight:700;font-family:var(--mono);letter-spacing:-1px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow);text-align:center}
+.stat-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:8px;text-align:center}
+.stat-val{font-size:30px;font-weight:700;font-family:var(--mono);letter-spacing:-1px;text-align:center}
 .stat-val.green{color:var(--green)}.stat-val.amber{color:var(--amber)}.stat-val.red{color:var(--red)}.stat-val.accent{color:var(--accent)}
 
 /* SLOT GRID */
 .slot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.slot-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;box-shadow:var(--shadow);cursor:pointer;transition:all .18s;position:relative}
+.slot-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;box-shadow:var(--shadow);cursor:pointer;transition:all .18s;position:relative;text-align:center}
 .slot-card:hover{border-color:var(--accent);box-shadow:var(--shadow-md);transform:translateY(-1px)}
 .slot-card.booked{background:var(--green-light);border-color:#a3d9bc;cursor:default}
 .slot-card.booked:hover{transform:none;box-shadow:var(--shadow)}
 .slot-card.blocked{background:#f5f5f5;border-color:#ddd;opacity:.6;cursor:not-allowed}
 .slot-card.blocked:hover{transform:none;border-color:#ddd}
-.slot-time{font-size:16px;font-weight:700;font-family:var(--mono);letter-spacing:-.5px;margin-bottom:6px}
-.slot-status{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.slot-time{font-size:20px;font-weight:800;font-family:var(--mono);letter-spacing:-.5px;margin-bottom:8px;text-align:center}
+.slot-status{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:5px;text-align:center}
 .slot-status::before{content:'';width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .slot-card.available .slot-status{color:var(--muted)}.slot-card.available .slot-status::before{background:#ccc}
 .slot-card.booked .slot-status{color:var(--green)}.slot-card.booked .slot-status::before{background:var(--green)}
 .slot-card.blocked .slot-status{color:var(--muted)}.slot-card.blocked .slot-status::before{background:#bbb}
-.slot-info{font-size:11px;color:var(--muted);line-height:1.5}
+.slot-info{font-size:12px;color:var(--muted);line-height:1.6;text-align:center}
 .slot-info strong{color:var(--ink);font-weight:600}
-.slot-capacity{font-size:10px;color:var(--green);margin-top:5px;font-weight:600}
+.slot-capacity{font-size:12px;color:var(--green);margin-top:7px;font-weight:700;text-align:center}
 .capacity-full{color:var(--red)}
 .capacity-warning{color:var(--amber)}
 
@@ -209,7 +209,7 @@ body.boot-loading #loaderOverlay{display:flex !important}
 
 /* SLOTS PICKER */
 .slots-picker-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:380px;overflow-y:auto;padding-right:4px}
-.slot-pick{border:1.5px solid var(--border);border-radius:var(--r);padding:10px 8px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface)}
+.slot-pick{border:1.5px solid var(--border);border-radius:var(--r);padding:14px 10px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface)}
 .slot-pick:hover:not(.taken){border-color:var(--accent);background:var(--accent-light)}
 .slot-pick.selected{border-color:var(--accent);background:var(--accent);color:#fff}
 .slot-pick.selected .sp-time{color:#fff}.slot-pick.selected .sp-cap{color:rgba(255,255,255,.75)}
@@ -217,9 +217,9 @@ body.boot-loading #loaderOverlay{display:flex !important}
 .slot-pick.dimmed{background:#f5f5f5;border-color:#ddd;cursor:not-allowed;opacity:.45;filter:grayscale(1)}
 .slot-pick.full{background:var(--red-light);border-color:var(--red);opacity:.7}
 .slot-pick.warning{background:var(--amber-light);border-color:var(--amber)}
-.sp-time{font-size:13px;font-weight:700;font-family:var(--mono)}
-.sp-cap{font-size:10px;color:var(--muted);margin-top:2px}
-.sp-capacity{font-size:9px;color:var(--green);margin-top:3px}
+.sp-time{font-size:17px;font-weight:800;font-family:var(--mono)}
+.sp-cap{font-size:12px;color:var(--muted);margin-top:4px}
+.sp-capacity{font-size:11px;color:var(--green);margin-top:5px;font-weight:700}
 .sp-capacity.full{color:var(--red)}
 .sp-capacity.warning{color:var(--amber)}
 
@@ -336,14 +336,13 @@ tbody tr:hover td{background:#fafaf8}
       <label>كلمة المرور</label>
       <input type="password" id="loginPass" placeholder="أدخل كلمة المرور">
     </div>
-    <div style="text-align:left;margin:-8px 0 10px">
-      <button type="button" id="forgotPassBtn" style="all:unset;color:var(--accent);cursor:pointer;font-size:12px;font-weight:600">نسيت كلمة المرور؟</button>
+    <div style="display:none;text-align:left;margin:-8px 0 10px">
+      <button type="button" id="forgotPassBtn" style="all:unset;color:var(--accent);cursor:pointer;font-size:12px;font-weight:600"></button>
     </div>
     <button class="login-btn" id="loginBtn">دخول ←</button>
     
-    <div class="signup-link" onclick="document.getElementById('signupModal')?.classList.add('open');" style="pointer-events:auto;position:relative;z-index:50">
-      ليس لديك حساب؟
-      <button type="button" id="showSignupBtn" onclick="event.stopPropagation(); document.getElementById('signupModal')?.classList.add('open');" style="all:unset;color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;pointer-events:auto;position:relative;z-index:60">إنشاء حساب جديد للمورد</button>
+    <div class="signup-link" onclick="document.getElementById('signupModal')?.classList.add('open');" style="display:none;pointer-events:auto;position:relative;z-index:50">
+      <button type="button" id="showSignupBtn" onclick="event.stopPropagation(); document.getElementById('signupModal')?.classList.add('open');" style="all:unset;color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600;pointer-events:auto;position:relative;z-index:60"></button>
     </div>
   </div>
 </div>
@@ -354,11 +353,11 @@ tbody tr:hover td{background:#fafaf8}
     <button class="modal-close" id="closeSignupBtn" type="button" onclick="document.getElementById('signupModal')?.classList.remove('open')">✕</button>
     <h3>📝 إنشاء حساب مورد جديد</h3>
     <div class="form-group"><label>اسم الشركة</label><input type="text" id="signupCompany" placeholder="مثال: شركة النيل للتوريدات"></div>
-    <div class="form-group"><label>اختر المخزن الافتراضي</label><select id="signupWarehouse"><option value="warehouse1">🏭 Talabeya-NSR</option><option value="warehouse2">🏭 Talabeya-GZA</option><option value="warehouse3">🏭 Talabeya-DC</option><option value="warehouse4">🏭 Talabeya-Hub</option></select></div>
+    <div class="form-group"><label>اختر المخزن الافتراضي</label><select id="signupWarehouse"><option value="warehouse1">🏭 طلبية - مدينة نصر</option><option value="warehouse2">🏭 طلبية - الجيزة</option><option value="warehouse3">🏭 Talabeya-DC</option><option value="warehouse4">🏭 Talabeya-Hub</option></select></div>
     <div class="form-group"><label>اسم المستخدم</label><input type="text" id="signupUsername" placeholder="اختر اسم مستخدم"></div>
     <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="signupEmail" placeholder="example@domain.com"></div>
     <div class="form-group"><label>كلمة المرور</label><input type="password" id="signupPassword" placeholder="أدخل كلمة المرور"></div>
-    <div class="form-group"><label>تأكيد كلمة المرور</label><input type="password" id="signupConfirmPassword" placeholder="أعد إدخال كلمة المرور"></div>
+    <div class="form-group"><label>تأكيد كلمة المرور</label><input type="password" id="signupConfirmPassword" placeholder="أع�� إدخال كلمة المرور"></div>
     <button class="btn-primary" id="doSignupBtn" type="button">إنشاء حساب</button>
   </div>
 </div>
@@ -366,7 +365,7 @@ tbody tr:hover td{background:#fafaf8}
 <!-- FORGOT PASSWORD MODAL -->
 <div class="modal-overlay" id="forgotModal" onclick="this.classList.remove('open')">
   <div class="modal" onclick="event.stopPropagation()">
-    <button class="modal-close" id="closeForgotBtn" type="button" onclick="document.getElementById('forgotModal')?.classList.remove('open')">✕</button>
+    <button class="modal-close" id="closeForgotBtn" type="button" onclick="document.getElementById('forgotModal')?.classList.remove('open')">��</button>
     <h3>🔑 استعادة كلمة المرور</h3>
     <div class="form-group"><label>اسم المستخدم</label><input type="text" id="forgotUsername" placeholder="اكتب اسم المستخدم"></div>
     <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="forgotEmail" placeholder="example@domain.com"></div>
@@ -466,8 +465,8 @@ function closeSignupModal(){
   <div class="warehouse-selector">
     <label>🏭 اختر المخزن:</label>
     <select id="selectedWarehouse">
-      <option value="warehouse1">Talabeya-NSR</option>
-      <option value="warehouse2">Talabeya-GZA</option>
+      <option value="warehouse1">طلبية - مدينة نصر</option>
+      <option value="warehouse2">طلبية - الجيزة</option>
       <option value="warehouse3">Talabeya-DC</option>
       <option value="warehouse4">Talabeya-Hub</option>
     </select>
@@ -520,8 +519,8 @@ function closeSignupModal(){
   <div class="warehouse-selector">
     <label>🏭 اختر المخزن المراد الحجز فيه:</label>
     <select id="bookingWarehouseSelect">
-      <option value="warehouse1">🏭 Talabeya-NSR</option>
-      <option value="warehouse2">🏭 Talabeya-GZA</option>
+      <option value="warehouse1">🏭 طلبية - مدينة نصر</option>
+      <option value="warehouse2">🏭 طلبية - الجيزة</option>
       <option value="warehouse3">🏭 Talabeya-DC</option>
       <option value="warehouse4">🏭 Talabeya-Hub</option>
     </select>
@@ -538,7 +537,7 @@ function closeSignupModal(){
     <div class="panel">
       <h2>📅 احجز موعد جديد</h2>
       <div class="form-group" id="supCodeGroup" style="display:none"><label>كود المورد</label><input type="text" id="supCode" placeholder="اكتب كود المورد"></div>
-      <div class="form-group"><label>اسم المورد / الشركة</label><input type="text" id="supName" readonly style="background:#f0f0ec" placeholder="اكتب اسم المورد"></div>
+      <div class="form-group"><label>اسم المورد / الشركة</label><input type="text" id="supName" readonly style="background:#f0f0ec" placeholder="اكتب اسم المورد"><select class="date-input" id="supNameSelect" style="display:none;width:100%;margin-top:0"></select></div>
       <div class="form-row">
         <div class="form-group"><label>رقم الأوردر</label><input type="text" id="supOrder" placeholder="PO-12345"></div>
         <div class="form-group"><label>نوع البضاعة <span style="color:red">*</span></label><select id="supType">
@@ -598,8 +597,8 @@ function closeSignupModal(){
     <label>�� اختر المخزن:</label>
     <select id="bookingsWarehouseFilter">
       <option value="">كل المخازن</option>
-      <option value="warehouse1">Talabeya-NSR</option>
-      <option value="warehouse2">Talabeya-GZA</option>
+      <option value="warehouse1">طلبية - مدينة نصر</option>
+      <option value="warehouse2">طلبية - الجيزة</option>
       <option value="warehouse3">Talabeya-DC</option>
       <option value="warehouse4">Talabeya-Hub</option>
     </select>
@@ -619,8 +618,8 @@ function closeSignupModal(){
     <label>🏭 اختر المخزن:</label>
     <select id="reportsWarehouseFilter">
       <option value="">كل المخازن</option>
-      <option value="warehouse1">Talabeya-NSR</option>
-      <option value="warehouse2">Talabeya-GZA</option>
+      <option value="warehouse1">طلبية - مدينة نصر</option>
+      <option value="warehouse2">طلبية - الجيزة</option>
       <option value="warehouse3">Talabeya-DC</option>
       <option value="warehouse4">Talabeya-Hub</option>
     </select>
@@ -756,8 +755,8 @@ function closeSignupModal(){
 <script>
 // ==================== DATA ====================
 const WAREHOUSES = {
-  warehouse1: { id: 'warehouse1', name: 'Talabeya-NSR', code: 'NSR' },
-  warehouse2: { id: 'warehouse2', name: 'Talabeya-GZA', code: 'GZA' },
+  warehouse1: { id: 'warehouse1', name: 'طلبية - مدينة نصر', code: 'NSR' },
+  warehouse2: { id: 'warehouse2', name: 'طلبية - الجيزة', code: 'GZA' },
   warehouse3: { id: 'warehouse3', name: 'Talabeya-DC', code: 'TDC' },
   warehouse4: { id: 'warehouse4', name: 'Talabeya-Hub', code: 'HUB' }
 };
@@ -995,9 +994,42 @@ function fillSupplierNameFromCode() {
     if (!isSupplierAdminUser(currentSupplierData)) return;
     const code = document.getElementById('supCode')?.value || '';
     const supNameEl = document.getElementById('supName');
+    const sel = document.getElementById('supNameSelect');
     if (!supNameEl) return;
     const match = findSupplierByCode(code);
     supNameEl.value = match ? (match.company || '') : '';
+    if (sel && match) sel.value = match.company || '';
+  } catch(e) {}
+}
+
+function supplierAdminOptions() {
+  return (getSuppliersForLogin() || [])
+    .filter(s => !isSupplierAdminUser(s) && String(s.company || '').trim())
+    .sort((a,b) => String(a.company||'').localeCompare(String(b.company||''), 'ar'));
+}
+
+function populateSupplierAdminDropdown() {
+  try {
+    const sel = document.getElementById('supNameSelect');
+    if (!sel) return;
+    const list = supplierAdminOptions();
+    sel.innerHTML = `<option value="">اختر المورد...</option>` + list.map(s => {
+      const code = String(s.supplierCode || s.suppliercode || s.code || '').trim();
+      const label = code ? `${code} - ${s.company}` : s.company;
+      return `<option value="${String(s.company || '').replace(/"/g,'&quot;')}">${label}</option>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function onSupplierNameDropdownChange() {
+  try {
+    const sel = document.getElementById('supNameSelect');
+    const inp = document.getElementById('supName');
+    const codeInp = document.getElementById('supCode');
+    if (!sel || !inp) return;
+    inp.value = sel.value || '';
+    const match = supplierAdminOptions().find(s => String(s.company || '') === String(sel.value || ''));
+    if (codeInp && match) codeInp.value = String(match.supplierCode || match.suppliercode || match.code || '');
   } catch(e) {}
 }
 
@@ -2746,8 +2778,8 @@ const WAREHOUSE_USERS_STORAGE_KEY = 'warehouseUsers';
 function defaultWarehouseUsers() {
   return [
     { username: 'admin', password: 'admin123', label: 'الادمن', access: 'all' },
-    { username: 'wh1', password: 'wh1@123', label: 'مسؤول Talabeya-NSR', access: 'single', warehouseId: 'warehouse1' },
-    { username: 'wh2', password: 'wh2@123', label: 'مسؤول Talabeya-GZA', access: 'single', warehouseId: 'warehouse2' },
+    { username: 'wh1', password: 'wh1@123', label: 'مسؤول طلبية - مدينة نصر', access: 'single', warehouseId: 'warehouse1' },
+    { username: 'wh2', password: 'wh2@123', label: 'مسؤول طلبية - الجيزة', access: 'single', warehouseId: 'warehouse2' },
     { username: 'wh3', password: 'wh3@123', label: 'مسؤول Talabeya-DC', access: 'single', warehouseId: 'warehouse3' },
     { username: 'wh4', password: 'wh4@123', label: 'مسؤول Talabeya-Hub', access: 'single', warehouseId: 'warehouse4' },
   ];
@@ -3088,7 +3120,7 @@ function applyWarehouseLogin(match) {
   if (currentWarehouseAccess === 'single' && match.warehouseId && WAREHOUSES[match.warehouseId]) {
     whNameForPill = WAREHOUSES[match.warehouseId].name;
   }
-  // Format: "الادمن - Talabeya-NSR" for admin, otherwise "مسؤول - Talabeya-NSR"
+  // Format: "الادمن - طلبية - مدينة نصر" for admin, otherwise "مسؤول - طلبية - مدينة نصر"
   const roleLabel = (currentWarehouseAccess === 'all') ? 'الادمن' : 'مسؤول';
   document.getElementById('userPillLabel').textContent = roleLabel + (whNameForPill ? ` - ${whNameForPill}` : '');
   document.getElementById('loginScreen').style.display = 'none';
@@ -3148,16 +3180,24 @@ function applySupplierLogin(match) {
   document.getElementById('userPillLabel').textContent = isSupplierAdmin ? 'ادمن المورد' : (match.company || '—');
   const supCodeGroup = document.getElementById('supCodeGroup');
   const supCodeEl = document.getElementById('supCode');
+  const supNameSelect = document.getElementById('supNameSelect');
   if (supCodeGroup) supCodeGroup.style.display = isSupplierAdmin ? 'block' : 'none';
   if (supCodeEl) supCodeEl.value = '';
+  if (supNameSelect) {
+    supNameSelect.style.display = isSupplierAdmin ? 'block' : 'none';
+    if (isSupplierAdmin) populateSupplierAdminDropdown();
+    supNameSelect.value = '';
+  }
   const supNameEl = document.getElementById('supName');
   if (supNameEl) {
     if (isSupplierAdmin) {
-      supNameEl.readOnly = false;
-      supNameEl.style.background = 'var(--surface)';
+      supNameEl.readOnly = true;
+      supNameEl.style.display = 'none';
+      supNameEl.style.background = '#f0f0ec';
       supNameEl.value = '';
     } else {
       supNameEl.readOnly = true;
+      supNameEl.style.display = 'block';
       supNameEl.style.background = '#f0f0ec';
       supNameEl.value = (match.company || '');
     }
@@ -3295,6 +3335,7 @@ document.getElementById('myBookingsFrom').onchange = renderMyBookings;
 document.getElementById('myBookingsTo').onchange = renderMyBookings;
 document.getElementById('myBookingsSupplier').oninput = renderMyBookings;
 document.getElementById('supCode').oninput = fillSupplierNameFromCode;
+document.getElementById('supNameSelect').onchange = onSupplierNameDropdownChange;
 document.getElementById('supTruckCount').oninput = checkCapacity;
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
 document.getElementById('exportAllBtn').onclick = exportAllSheets;
@@ -3733,7 +3774,7 @@ function exportSupplierSummary() {
     if (b.status === 'completed') map[key].completed += 1;
     if (b.status === 'rejected') map[key].rejected += 1;
   });
-  let rows = [["المورد","إجمالي الحجوزات","مؤكد","مكتمل","مرفوض"]];
+  let rows = [["المورد","إجمالي الحجوزات","مؤكد","مكتمل","مرف��ض"]];
   Object.values(map).sort((a,b)=>b.total-a.total).forEach(s=>rows.push([s.supplier, s.total, s.approved, s.completed, s.rejected]));
   downloadExcel([{name:'ملخص الموردين', data: rows}], 'ملخص_الموردين.xlsx');
 }
