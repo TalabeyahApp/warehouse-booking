@@ -2938,11 +2938,11 @@ function deleteSupplierUserRow(idx) {
   list.splice(idx, 1);
   saveSupplierUsers(list);
   suppliers = loadSupplierUsers();
-  apiPost('deleteSupplier', { username: u.username }).catch(()=>{});
+  apiGet('deleteSupplier', { username: u.username }).catch(()=>{});
   renderSupplierUsersModal();
 }
 
-function saveSupplierUsersFromModal() {
+async function saveSupplierUsersFromModal() {
   let list = loadSupplierUsers();
   let inputs = Array.from(document.querySelectorAll('#supplierUsersTbody [data-sup-idx]'));
   inputs.forEach(inp => {
@@ -2965,29 +2965,31 @@ function saveSupplierUsersFromModal() {
   saveSupplierUsers(list);
   suppliers = loadSupplierUsers();
 
-  // Sync to Google Sheets
-  Promise.resolve().then(async () => {
-    try {
-      for (let u of list) {
-        await apiPost('upsertSupplier', {
-          username: u.username,
-          email: u.email,
-          password: u.password,
-          supplierCode: u.supplierCode || '',
-          company: u.company,
-          defaultWarehouse: u.defaultWarehouse || 'warehouse1',
-          isAdmin: u.isAdmin ? true : false,
-          updatedAt: nowIso(),
-        });
-      }
-      await loadUsersFromApi();
-    } catch (e) {
-      console.error(e);
+  // Sync to Google Sheets via GET (avoids Apps Script POST redirect issue)
+  try {
+    showLoader('جاري الحفظ...');
+    for (let u of list) {
+      const res = await apiGet('upsertSupplier', {
+        username: u.username,
+        email: u.email,
+        password: u.password,
+        supplierCode: u.supplierCode || '',
+        company: u.company,
+        defaultWarehouse: u.defaultWarehouse || 'warehouse1',
+        isAdmin: u.isAdmin ? true : false,
+        updatedAt: nowIso(),
+      });
+      if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save supplier');
     }
-  });
-
-  alert('✅ تم حفظ مستخدمي الموردين');
-  document.getElementById('supplierUsersModal')?.classList.remove('open');
+    await loadUsersFromApi();
+    alert('✅ تم حفظ مستخدمي الموردين في Google Sheet');
+    document.getElementById('supplierUsersModal')?.classList.remove('open');
+  } catch (e) {
+    console.error(e);
+    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ في Google Sheet. تأكد من رابط Apps Script والأعمدة.');
+  } finally {
+    hideLoader();
+  }
 }
 
 function openUsersModal() {
