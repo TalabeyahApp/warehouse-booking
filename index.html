@@ -278,6 +278,8 @@ tbody tr:hover td{background:#fafaf8}
 .report-card-sub{font-size:11px;color:var(--muted);margin-top:4px}
 .report-filters{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px}
 .report-filters .date-input,.report-filters select{min-width:140px}
+.date-filter-field{display:flex;flex-direction:column;gap:4px}
+.date-filter-field label{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.4px;text-align:left;padding:0 2px}
 .report-kpis{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin:6px 0 10px}
 .kpi{min-width:72px;text-align:center}
 .kpi .v{font-family:var(--mono);font-size:18px;font-weight:800;line-height:1}
@@ -503,8 +505,8 @@ function closeSignupModal(){
       </div>
     </div>
     <div class="report-filters" style="margin-top:0">
-      <input type="date" class="date-input" id="myBookingsFrom" placeholder="من">
-      <input type="date" class="date-input" id="myBookingsTo" placeholder="إلى">
+      <div class="date-filter-field"><label>From</label><input type="date" class="date-input" id="myBookingsFrom" placeholder="من"></div>
+      <div class="date-filter-field"><label>To</label><input type="date" class="date-input" id="myBookingsTo" placeholder="إلى"></div>
       <input type="text" class="date-input" id="myBookingsSupplier" placeholder="اسم المورد" style="min-width:180px;display:none">
     </div>
     <div style="overflow-x:auto;max-height:220px">
@@ -625,8 +627,8 @@ function closeSignupModal(){
     </select>
   </div>
   <div class="report-filters" style="margin-bottom:16px">
-    <input type="date" class="date-input" id="rFrom">
-    <input type="date" class="date-input" id="rTo">
+    <div class="date-filter-field"><label>From</label><input type="date" class="date-input" id="rFrom"></div>
+    <div class="date-filter-field"><label>To</label><input type="date" class="date-input" id="rTo"></div>
   </div>
   <button class="btn-export-all" id="exportAllBtn" style="margin-bottom:20px">⬇ تحميل كل التقارير في ملف واحد</button>
 
@@ -2831,7 +2833,7 @@ function renderUsersModal() {
         <select class="date-input" style="width:140px" data-user-idx="${idx}" data-field="access" ${isAdmin?'disabled':''}>
           <option value="all">كل المخازن</option>
           <option value="single">مخزن واحد</option>
-          <option value="view">عرض فقط</option>
+          <option value="view">عرض كل المخازن فقط</option>
         </select>
       </td>
       <td>
@@ -3009,9 +3011,9 @@ function saveUsersFromModal() {
 
   // Normalize / enforce rules
   users = users.map(u => {
-    let access = (u.access === 'all') ? 'all' : 'single';
+    let access = (u.access === 'all') ? 'all' : ((u.access === 'view') ? 'view' : 'single');
     let out = { ...u, access };
-    if (access === 'all') {
+    if (access === 'all' || access === 'view') {
       delete out.warehouseId;
     } else {
       out.warehouseId = out.warehouseId || 'warehouse1';
@@ -3112,8 +3114,8 @@ function applyWarehouseLogin(match) {
     <button class="tab-btn active" onclick="switchPage('warehouse')">🏭 المخازن</button>
     <button class="tab-btn" onclick="switchPage('bookings')">📋 الحجوزات</button>
     <button class="tab-btn" onclick="switchPage('reports')">📊 التقارير</button>
-    ${currentWarehouseAccess !== 'single' ? '<button class="tab-btn" onclick="openUsersModal()">👤 مستخدمي المخازن</button>' : ''}
-    ${currentWarehouseAccess !== 'single' ? '<button class="tab-btn" onclick="openSupplierUsersModal()">🚚 مستخدمي الموردين</button>' : ''}
+    ${currentWarehouseAccess === 'all' ? '<button class="tab-btn" onclick="openUsersModal()">👤 مستخدمي المخازن</button>' : ''}
+    ${currentWarehouseAccess === 'all' ? '<button class="tab-btn" onclick="openSupplierUsersModal()">🚚 مستخدمي الموردين</button>' : ''}
   `;
   // Show user label + warehouse name (when applicable)
   let whNameForPill = '';
@@ -3121,7 +3123,7 @@ function applyWarehouseLogin(match) {
     whNameForPill = WAREHOUSES[match.warehouseId].name;
   }
   // Format: "الادمن - طلبية - مدينة نصر" for admin, otherwise "مسؤول - طلبية - مدينة نصر"
-  const roleLabel = (currentWarehouseAccess === 'all') ? 'الادمن' : 'مسؤول';
+  const roleLabel = (currentWarehouseAccess === 'all') ? 'الادمن' : (currentWarehouseAccess === 'view' ? 'عرض فقط' : 'مسؤول');
   document.getElementById('userPillLabel').textContent = roleLabel + (whNameForPill ? ` - ${whNameForPill}` : '');
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('topbar').style.display = 'flex';
