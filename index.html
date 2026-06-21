@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>نظام حجز استلامات المخازن</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- Remote API (backend) -->
+<!-- Google Apps Script API (Sheets backend) -->
 <script>
   const API_URL = "https://script.google.com/macros/s/AKfycbxQdTlYfYmKHFqM6Lz1VmgcySQIsRvmIGok6_RnxXgqWZQyfnm_mt4uV__0vZWmeRuhsw/exec";
   async function apiGet(action, params = {}) {
@@ -37,7 +37,7 @@
       return res;
     }
 
-    // Remote API Web App often responds with 302 to a googleusercontent.com URL.
+    // Google Apps Script Web App often responds with 302 to a googleusercontent.com URL.
     // Browsers convert POST -> GET on 302, which drops the body, so writes won't happen.
     // Fix: follow redirect manually and re-POST to the Location.
     let res = await doPost(API_URL);
@@ -303,17 +303,15 @@ tbody tr:hover td{background:#fafaf8}
 <body>
 
 <script>
-  // Fail-safe: if any runtime error happens, stop infinite loader without logging the user out.
+  // Fail-safe: if any runtime error happens, stop infinite loader.
   try {
-    window.addEventListener('error', (ev) => {
-      console.error(ev?.error || ev?.message || ev);
+    window.addEventListener('error', () => {
       try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
-      try { document.body.classList.remove('boot-loading'); } catch(_) {}
+      try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
     });
-    window.addEventListener('unhandledrejection', (ev) => {
-      console.error(ev?.reason || ev);
+    window.addEventListener('unhandledrejection', () => {
       try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
-      try { document.body.classList.remove('boot-loading'); } catch(_) {}
+      try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
     });
   } catch(e) {}
 </script>
@@ -954,7 +952,7 @@ function saveSupplierUsers(users) {
 // Initialize suppliers from storage
 suppliers = loadSupplierUsers();
 
-// ==================== USERS SYNC (قاعدة البيانات) ====================
+// ==================== USERS SYNC (Google Sheets) ====================
 let remoteWarehouseUsers = null;
 let remoteSuppliers = null;
 
@@ -966,7 +964,7 @@ async function loadUsersFromApi() {
     ]);
     if (wRes && wRes.ok && Array.isArray(wRes.data)) {
       remoteWarehouseUsers = wRes.data;
-      // Keep local modal data in sync with قاعدة البيانات, including deleted rows
+      // Keep local modal data in sync with Google Sheet, including deleted rows
       if (remoteWarehouseUsers.length) {
         saveWarehouseUsers(remoteWarehouseUsers.map(u => ({
           username: u.username || '',
@@ -980,7 +978,7 @@ async function loadUsersFromApi() {
     if (sRes && sRes.ok && Array.isArray(sRes.data)) {
       remoteSuppliers = sRes.data;
       // If supplier users exist remotely, use them for login and modal rendering.
-      // This also removes rows locally when they were deleted directly from قاعدة البيانات.
+      // This also removes rows locally when they were deleted directly from Google Sheet.
       suppliers = remoteSuppliers.map(x => ({
         username: x.username || '',
         email: x.email || '',
@@ -1214,7 +1212,7 @@ async function loadWarehouseDataFromApi() {
       try {
         const d = new Date(v);
         if (isNaN(d.getTime())) return '';
-        // IMPORTANT: قاعدة البيانات often returns time-only cells as Date objects.
+        // IMPORTANT: Google Sheets often returns time-only cells as Date objects.
         // When serialized to ISO they are shifted to UTC. We must read as UTC here
         // so the time stays consistent across devices.
         const hh = String(d.getUTCHours()).padStart(2,'0');
@@ -1279,7 +1277,7 @@ async function loadWarehouseDataFromApi() {
       warehouseData[whId].blockedSlots.push(getSlotKey(date, time));
     });
 
-    // capacity overrides (prefer parsing from id to avoid time/date coercion)
+    // capacity overrides (prefer parsing from id to avoid Sheets time/date coercion)
     (caps || []).forEach(x => {
       const whId = x.warehouseId || x.warehouse || x.warehouseid;
       let date = '';
@@ -1415,7 +1413,7 @@ async function refreshDataWithLoaderSafe() {
   } catch(e) {
     console.error(e);
     try { hideLoader(); } catch(_) {}
-    alert('تعذر تحميل البيانات. تأكد من رابط Remote API (exec) وأن ping يرجع JSON.');
+    alert('تعذر تحميل البيانات. تأكد من رابط Google Apps Script (exec) وأن ping يرجع JSON.');
     return false;
   }
 }
@@ -1431,7 +1429,7 @@ const PENDING_BOOKING_SYNC_KEY = 'pendingBookingSync';
 function bookingApiPayload(whId, booking) {
   const dateStr = (booking.date || '').trim();
   const timeStr = (booking.time || '').trim();
-  // Force storage to store as text to avoid timezone / 1899-date conversions
+  // Force Sheets to store as text to avoid timezone / 1899-date conversions
   const sheetDate = dateStr ? ("'" + dateStr) : '';
   const sheetTime = timeStr ? ("'" + timeStr) : '';
   const payload = {
@@ -1649,7 +1647,7 @@ function downloadExcel(sheets, filename) {
 }
 
 // Export all reports in one file (used by top button)
-function exportAllReports() {
+function exportAllSheets() {
   let whFilter = document.getElementById('reportsWarehouseFilter')?.value || '';
   // Bookings
   let bookingsList = getAllBookings(whFilter);
@@ -1815,25 +1813,24 @@ function checkCapacity() {
     return;
   }
   
-  let available = editBookingGroupId ? getSlotAvailableCapacityExcludingGroup(whId, date, time, editBookingGroupId) : getSlotAvailableCapacity(whId, date, time);
-  const actionText = editBookingGroupId ? 'حفظ التعديل' : `✓ احجز الساعة ${time}`;
+  let available = getSlotAvailableCapacity(whId, date, time);
   
   if (requestedUnits > available) {
     // Do NOT block booking; spillover logic in submitBooking will distribute across next slots.
     errorMsg.classList.remove('show');
     warningMsg.classList.add('show');
     bookBtn.disabled = false;
-    bookBtn.textContent = editBookingGroupId ? `حفظ التعديل - سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)` : `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
+    bookBtn.textContent = `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
   } else if (requestedUnits === available && available > 0) {
     errorMsg.classList.remove('show');
     warningMsg.classList.add('show');
     bookBtn.disabled = false;
-    bookBtn.textContent = editBookingGroupId ? `حفظ التعديل (آخر ${fmtCap(Math.max(available,0))} وحدة)` : `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
+    bookBtn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
   } else {
     errorMsg.classList.remove('show');
     warningMsg.classList.remove('show');
     bookBtn.disabled = false;
-    bookBtn.textContent = actionText;
+    bookBtn.textContent = `✓ احجز الساعة ${time}`;
   }
 }
 
@@ -1963,7 +1960,7 @@ function toggleBlock(date, time) {
     isBlockedNow = true;
   }
   saveWarehouseData(whId);
-  // Sync shared data
+  // Sync to Sheets
   upsertBlockedSlotToApi(whId, date, time, isBlockedNow);
   renderWarehouse();
 }
@@ -1985,7 +1982,7 @@ function editSlotCapacity(date, time) {
   if (!v) {
     delete warehouseData[whId].slotCapacityOverrides[key];
     saveWarehouseData(whId);
-    // Sync delete to remote storage so all users fall back to default capacity
+    // Sync delete to Sheets so all users fall back to default capacity
     try {
       showLoader('جاري التحميل...');
       apiGet('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` })
@@ -2002,7 +1999,7 @@ function editSlotCapacity(date, time) {
   }
   warehouseData[whId].slotCapacityOverrides[key] = n;
   saveWarehouseData(whId);
-  // Sync to shared
+  // Sync to Sheets (shared)
   try {
     showLoader('جاري التحميل...');
     apiGet('upsertSlotCapacityOverride', {
@@ -2069,18 +2066,16 @@ function completeBooking(whId, id) {
 let currentSupplierData = null;
 let currentWarehouseUserData = null;
 let selectedSlot = null;
-let editBookingGroupId = null;
 
 function renderSupplierSlots() {
   let date = document.getElementById('supDate').value;
   let whId = document.getElementById('bookingWarehouseSelect').value;
-  const isEditMode = !!editBookingGroupId;
   
   if (!date || !currentSupplierData) return;
-  if (!isEditMode) selectedSlot = null;
+  selectedSlot = null;
   let btn = document.getElementById('bookBtn');
-  btn.disabled = isEditMode ? false : true;
-  btn.textContent = isEditMode ? 'حفظ التعديل' : 'اختر الوقت أولاً ↓';
+  btn.disabled = true;
+  btn.textContent = 'اختر الوقت أولاً ↓';
   
   let warningMsg = document.getElementById('capacityWarningMsg');
   let errorMsg = document.getElementById('capacityErrorMsg');
@@ -2100,15 +2095,8 @@ function renderSupplierSlots() {
   let grid = document.getElementById('supplierSlots');
   grid.innerHTML = SLOTS_PER_DAY.map(time => {
     let st = slotStatus(whId, date, time);
-    let available = slotCapacity(whId, date, time) - getSlotBookedCount(whId, date, time);
-    if (isEditMode) {
-      available = getSlotAvailableCapacityExcludingGroup(whId, date, time, editBookingGroupId);
-      if (isPastSlot(date, time)) st = 'past';
-      else if (isBlocked(whId, date, time)) st = 'blocked';
-      else if (available <= 0) st = 'full';
-      else if (available <= 1) st = 'warning';
-      else st = 'available';
-    }
+    let bookedCount = getSlotBookedCount(whId, date, time);
+    let available = slotCapacity(whId, date, time) - bookedCount;
     let taken = (st === 'blocked' || st === 'full' || st === 'past');
     let cap = '';
     let extraClass = '';
@@ -2138,8 +2126,7 @@ function renderSupplierSlots() {
     }
 
     let onclickAttr = (!taken && st !== 'full') ? `onclick="pickSlot(this,'${time}')"` : '';
-    const selectedClass = (isEditMode && selectedSlot === time) ? 'selected' : '';
-    return `<div class="slot-pick ${taken?'taken':''} ${extraClass} ${selectedClass}" data-time="${time}" ${onclickAttr}>
+    return `<div class="slot-pick ${taken?'taken':''} ${extraClass}" data-time="${time}" ${onclickAttr}>
       <div class="sp-time">${slotDisplayLabel(time)}</div>
       <div class="sp-cap">${cap}</div>
       <div class="sp-capacity ${extraClass}">🚛 سعة ${slotCapacity(whId, date, time)}</div>
@@ -2209,10 +2196,6 @@ function renderMyBookings() {
     let tooLate = (minsToStart !== null && minsToStart <= 30);
     let cancelAllowed = canCancel && !hasCheckIn && !tooLate;
     let cancelReason = hasCheckIn ? 'تم تسجيل الدخول بالمخزن' : (tooLate ? 'تبقى أقل من 30 دقيقة على بداية الموعد' : '');
-    const currentUsername = String(currentSupplierData?.username || '').trim().toLowerCase();
-    const createdBySameUser = parts.every(p => String(p.createdBy || '').trim().toLowerCase() === currentUsername);
-    const editBlockedReason = date === today() ? 'لا يمكن تعديل حجز نفس اليوم' : (hasCheckIn ? 'لا يمكن التعديل بعد تسجيل الدخول' : (!createdBySameUser ? 'لا يمكن تعديل الحجز إلا من خلال اليوزر الذي أنشأه' : ''));
-    const editAllowed = !!createdBySameUser && date !== today() && !hasCheckIn;
     // Show queue number for the first slot (or '-')
     let q = parts[0].queueNo || '-';
     return `<tr>
@@ -2227,7 +2210,6 @@ function renderMyBookings() {
         <div class="action-btns">
           <button class="btn-sm btn-details" type="button" onclick="trackMyBooking('${g.groupId}')">تتبع</button>
           <button class="btn-sm btn-details" type="button" onclick="setArrivalSupplier('${g.groupId}')">وصول</button>
-          <button class="btn-sm btn-details" type="button" ${editAllowed ? '' : 'disabled'} ${editAllowed ? '' : 'style="opacity:.45;cursor:not-allowed"'} title="${editBlockedReason}" onclick="startEditMyBooking('${g.groupId}')">تعديل</button>
           <button class="btn-sm btn-cancel" type="button" ${cancelAllowed ? '' : 'disabled'} ${cancelAllowed ? '' : 'style="opacity:.45;cursor:not-allowed"'} title="${cancelAllowed ? '' : cancelReason}" onclick="cancelMyBooking('${g.groupId}')">إلغاء</button>
         </div>
       </td>
@@ -2246,262 +2228,6 @@ function minutesUntilSlotStart(dateStr, timeStr) {
   } catch(e) {
     return null;
   }
-}
-
-
-function getMyBookingTargets(groupId) {
-  const gid = String(groupId || '').trim();
-  let targets = [];
-  if (!gid) return targets;
-  for (let whId in warehouseData) {
-    (warehouseData[whId]?.bookings || []).forEach(b => {
-      if (deriveGroupKey(b) === gid) targets.push({ whId, b });
-    });
-  }
-  return targets;
-}
-
-function canCurrentSupplierManageTargets(targets) {
-  const canManageAnySupplier = isSupplierAdminUser(currentSupplierData) || canBookAnySupplierByCode(currentSupplierData);
-  if (canManageAnySupplier) return true;
-  const supplierName = String(currentSupplierData?.company || '').trim();
-  return !!supplierName && !targets.some(x => String(x.b.supplier || '').trim() !== supplierName);
-}
-
-function canCurrentSupplierEditTargets(targets) {
-  const username = String(currentSupplierData?.username || '').trim().toLowerCase();
-  if (!username || !targets.length) return false;
-  // Editing is allowed only for the user who originally created the booking.
-  return targets.every(x => String(x.b.createdBy || '').trim().toLowerCase() === username);
-}
-
-function getSlotAvailableCapacityExcludingGroup(whId, date, time, groupId) {
-  const cap = slotCapacity(whId, date, time);
-  const gid = String(groupId || '').trim();
-  const used = (warehouseData[whId]?.bookings || [])
-    .filter(b => b.date === date && b.time === time && b.status !== 'rejected' && b.status !== 'cancelled' && deriveGroupKey(b) !== gid)
-    .reduce((sum, b) => sum + (bookingCapacityUnits(b) || 0), 0);
-  return cap - used;
-}
-
-function nextQueueNoExcludingGroup(whId, date, slotTime, groupId) {
-  let list = (warehouseData[whId]?.bookings || []).filter(b => b.date === date && b.time === slotTime && deriveGroupKey(b) !== String(groupId || '').trim());
-  let maxQ = 0;
-  list.forEach(b => {
-    let m = String(b.queueNo || '').trim().match(/^(\d+)/);
-    let q = m ? parseInt(m[1], 10) : NaN;
-    if (Number.isFinite(q) && q > maxQ) maxQ = q;
-  });
-  let n = maxQ + 1;
-  let letter = slotLetter(slotTime);
-  return letter ? `${n} ${letter}` : String(n);
-}
-
-function resetBookingEditMode() {
-  editBookingGroupId = null;
-  ['supDate','bookingWarehouseSelect','supTruckCount','supCartons'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.disabled = false; el.style.opacity = 1; el.style.cursor = ''; }
-  });
-  const btn = document.getElementById('bookBtn');
-  if (btn) { btn.disabled = selectedSlot ? false : true; btn.textContent = selectedSlot ? `✓ احجز الساعة ${selectedSlot}` : 'اختر الوقت أولاً ↓'; }
-}
-
-function startEditMyBooking(groupId) {
-  try {
-  const targets = getMyBookingTargets(groupId);
-  if (!targets.length) return;
-  if (!canCurrentSupplierEditTargets(targets)) { alert('لا يمكن تعديل الحجز إلا من خلال اليوزر الذي أنشأه'); return; }
-  if (targets.some(x => String(x.b.date || '').trim() === today())) { alert('لا يمكن تعديل حجز نفس اليوم'); return; }
-  if (targets.some(x => x.b.checkInTime)) { alert('لا يمكن تعديل الحجز بعد تسجيل الدخول بالمخزن'); return; }
-  if (targets.some(x => !['approved','pending'].includes(x.b.status))) { alert('لا يمكن تعديل الحجز بعد تغيير حالته'); return; }
-
-  const first = targets[0].b;
-  editBookingGroupId = String(groupId || '').trim();
-  document.getElementById('bookingWarehouseSelect').value = targets[0].whId;
-  document.getElementById('supName').value = first.supplier || '';
-  document.getElementById('supOrder').value = first.orderNum || '';
-  document.getElementById('supType').value = first.goodsType || '';
-  document.getElementById('supPlate').value = first.plate || '';
-  document.getElementById('supDriver').value = first.driver || '';
-  document.getElementById('supTruckType').value = first.truckType || '';
-  document.getElementById('supTruckCount').value = targets.reduce((sum,x)=>sum+(parseFloat(x.b.truckCount)||0),0) || 1;
-  document.getElementById('supCartons').value = targets.reduce((sum,x)=>sum+(parseInt(x.b.cartons)||0),0) || 1;
-  document.getElementById('supDate').value = first.date || '';
-  document.getElementById('supNotes').value = first.notes || '';
-  selectedSlot = first.time || null;
-
-  // Editing can include date, warehouse, slot, truck count and cartons.
-  ['supDate','bookingWarehouseSelect','supTruckCount','supCartons'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) { el.disabled = false; el.style.opacity = 1; el.style.cursor = ''; }
-  });
-  renderSupplierSlots();
-  if (selectedSlot) {
-    const slotEl = document.querySelector(`.slot-pick[data-time="${selectedSlot}"]`);
-    if (slotEl && !slotEl.classList.contains('taken')) slotEl.classList.add('selected');
-  }
-  const btn = document.getElementById('bookBtn');
-  if (btn) { btn.disabled = false; btn.textContent = 'حفظ التعديل'; }
-  showAlert('bookAlert', 'يمكنك تعديل بيانات الحجز بما فيها التاريخ والمخزن والسلوت وعدد العربيات والكراتين ثم الضغط على حفظ التعديل.', 'success');
-  } catch(e) {
-    console.error(e);
-    alert('حدث خطأ أثناء فتح التعديل. برجاء تحديث الصفحة والمحاولة مرة أخرى.');
-  }
-}
-
-function saveEditedMyBooking() {
-  const targets = getMyBookingTargets(editBookingGroupId);
-  if (!targets.length) { resetBookingEditMode(); return; }
-  if (!canCurrentSupplierEditTargets(targets)) { showAlert('bookAlert', 'لا يمكن تعديل الحجز إلا من خلال اليوزر الذي أنشأه', 'error'); return; }
-  if (targets.some(x => String(x.b.date || '').trim() === today())) { showAlert('bookAlert', 'لا يمكن تعديل حجز نفس اليوم', 'error'); return; }
-  if (targets.some(x => x.b.checkInTime)) { showAlert('bookAlert', 'لا يمكن تعديل الحجز بعد تسجيل الدخول بالمخزن', 'error'); return; }
-  if (targets.some(x => !['approved','pending'].includes(x.b.status))) { showAlert('bookAlert', 'لا يمكن تعديل الحجز بعد تغيير حالته', 'error'); return; }
-
-  let supplier = document.getElementById('supName').value.trim();
-  if (canBookAnySupplierByCode(currentSupplierData) && !isSupplierAdminUser(currentSupplierData)) {
-    const typedCode = String(document.getElementById('supCode')?.value || '').trim();
-    if (typedCode) {
-      const matchByCode = findSupplierByCode(typedCode);
-      if (matchByCode && String(matchByCode.company || '').trim()) supplier = String(matchByCode.company || '').trim();
-    }
-  }
-  if (!supplier) { showAlert('bookAlert', 'يرجى تحديد اسم المورد', 'error'); return; }
-
-  const newWhId = document.getElementById('bookingWarehouseSelect').value;
-  const newDate = document.getElementById('supDate').value;
-  const newTruckType = document.getElementById('supTruckType').value;
-  const newTruckCount = parseFloat(document.getElementById('supTruckCount').value);
-  const newCartons = parseInt(document.getElementById('supCartons').value);
-  const groupId = String(editBookingGroupId || '').trim();
-  const first = targets[0].b;
-  const startTime = selectedSlot || first.time || SLOTS_PER_DAY[0];
-
-  if (!newWhId || !warehouseData[newWhId]) { showAlert('bookAlert', 'يرجى اختيار المخزن', 'error'); return; }
-  if (!newDate) { showAlert('bookAlert', 'يرجى اختيار التاريخ', 'error'); return; }
-  if (!isSupplierAdminUser(currentSupplierData) && newDate === today()) { showAlert('bookAlert', 'لا يمكن تعديل الحجز لنفس اليوم', 'error'); return; }
-  if (!isSupplierAdminUser(currentSupplierData)) {
-    for (let wid in warehouseData) {
-      const existsOther = (warehouseData[wid]?.bookings || []).some(b =>
-        deriveGroupKey(b) !== groupId &&
-        String(b.supplier || '').trim() === supplier &&
-        String(b.date || '').trim() === newDate &&
-        b.status !== 'cancelled' && b.status !== 'rejected'
-      );
-      if (existsOther) { showAlert('bookAlert', 'غير مسموح بأكثر من حجز في نفس اليوم.', 'error'); return; }
-    }
-  }
-  if (!newTruckType) { showAlert('bookAlert', 'يرجى اختيار نوع العربية', 'error'); return; }
-  if (newTruckCount < 0.5 || newTruckCount > 20) { showAlert('bookAlert', 'عدد العربيات يجب أن يكون بين 0.5 و 20', 'error'); return; }
-  if (newCartons <= 0) { showAlert('bookAlert', 'عدد الكراتين يجب أن يكون أكبر من صفر', 'error'); return; }
-  if (!document.getElementById('supType').value) { showAlert('bookAlert', 'يرجى اختيار نوع البضاعة', 'error'); return; }
-  if (isPastSlot(newDate, startTime)) { showAlert('bookAlert', 'هذا الموعد انتهى وقته', 'error'); return; }
-
-  const unitWeight = truckUnitWeight(newTruckType);
-  if (!unitWeight || unitWeight <= 0) { showAlert('bookAlert', 'نوع العربية غير صحيح', 'error'); return; }
-
-  let remainingUnits = newTruckCount * unitWeight;
-  let remainingCartons = newCartons;
-  const totalUnitsRequested = remainingUnits;
-  const startIdx = SLOTS_PER_DAY.indexOf(startTime);
-  if (startIdx < 0) { showAlert('bookAlert', 'الوقت المختار غير صحيح', 'error'); return; }
-
-  const chunks = [];
-  for (let i = startIdx; i < SLOTS_PER_DAY.length && remainingUnits > 0; i++) {
-    const slotTime = SLOTS_PER_DAY[i];
-    if (isPastSlot(newDate, slotTime)) continue;
-    if (isBlocked(newWhId, newDate, slotTime)) continue;
-    const availableUnits = getSlotAvailableCapacityExcludingGroup(newWhId, newDate, slotTime, groupId);
-    if (availableUnits <= 0) continue;
-    const allocateUnits = Math.min(remainingUnits, availableUnits);
-    if (allocateUnits <= 0) continue;
-    let allocateCartons = 0;
-    if (remainingCartons > 0) {
-      if (allocateUnits >= remainingUnits - 1e-9) {
-        allocateCartons = remainingCartons;
-      } else {
-        let ratio = allocateUnits / totalUnitsRequested;
-        allocateCartons = Math.max(0, Math.min(remainingCartons, Math.round(newCartons * ratio)));
-        if (allocateCartons === 0 && remainingCartons > 0) allocateCartons = 1;
-      }
-    }
-    chunks.push({ slotTime, allocateUnits, allocateTrucks: allocateUnits / unitWeight, allocateCartons });
-    remainingUnits -= allocateUnits;
-    remainingCartons -= allocateCartons;
-  }
-  if (remainingUnits > 0) {
-    showAlert('bookAlert', `❌ السعة غير كافية لإكمال التعديل. المتبقي بدون حجز: ${fmtCap(remainingUnits)} عربية.`, 'error');
-    return;
-  }
-
-  const updates = {
-    supplier,
-    orderNum: document.getElementById('supOrder').value.trim(),
-    goodsType: document.getElementById('supType').value,
-    plate: document.getElementById('supPlate').value.trim(),
-    driver: document.getElementById('supDriver').value.trim(),
-    truckType: newTruckType,
-    notes: document.getElementById('supNotes').value.trim(),
-    date: newDate,
-    statusUpdatedAt: new Date().toISOString(),
-  };
-
-  const existing = targets.map(x => x.b);
-  const oldWhIds = [...new Set(targets.map(x => x.whId))];
-  const changedBookings = [];
-
-  chunks.forEach((chunk, idx) => {
-    let b = existing[idx];
-    if (!b) {
-      b = { ...existing[0], id: `${groupId}-${idx + 1}`, groupId, createdAt: existing[0].createdAt || new Date().toISOString(), createdBy: existing[0].createdBy || currentSupplierData?.username || '' };
-    }
-    Object.assign(b, updates, {
-      warehouse: newWhId,
-      time: chunk.slotTime,
-      queueNo: nextQueueNoExcludingGroup(newWhId, newDate, chunk.slotTime, groupId),
-      truckCount: chunk.allocateTrucks,
-      unitsConsumed: chunk.allocateUnits,
-      cartons: chunk.allocateCartons,
-      status: b.status || 'approved',
-    });
-    changedBookings.push(b);
-  });
-
-  // Extra old split rows are cancelled so they no longer count in capacity.
-  existing.slice(chunks.length).forEach(b => {
-    b.status = 'cancelled';
-    b.cancelledAt = new Date().toISOString();
-    b.statusUpdatedAt = new Date().toISOString();
-    changedBookings.push(b);
-  });
-
-  // Remove the edited group's active rows from all old warehouses, then insert updated rows in the selected warehouse.
-  oldWhIds.forEach(whId => {
-    warehouseData[whId].bookings = (warehouseData[whId].bookings || []).filter(b => deriveGroupKey(b) !== groupId);
-  });
-  warehouseData[newWhId].bookings = warehouseData[newWhId].bookings || [];
-  changedBookings.forEach(b => {
-    const targetWh = (b.status === 'cancelled' && !chunks.includes(b)) ? (targets.find(x => x.b.id === b.id)?.whId || newWhId) : newWhId;
-    warehouseData[targetWh] = warehouseData[targetWh] || { bookings: [], blockedSlots: [], slotCapacityOverrides: {} };
-    warehouseData[targetWh].bookings.push(b);
-    upsertBookingToApi(targetWh, b);
-  });
-
-  [...new Set([...oldWhIds, newWhId])].forEach(saveWarehouseData);
-
-  resetBookingEditMode();
-  document.getElementById('supOrder').value = '';
-  document.getElementById('supPlate').value = '';
-  document.getElementById('supDriver').value = '';
-  document.getElementById('supNotes').value = '';
-  document.getElementById('supType').value = '';
-  document.getElementById('supTruckType').value = '';
-  document.getElementById('supTruckCount').value = '1';
-  document.getElementById('supCartons').value = '1';
-  selectedSlot = null;
-  renderSupplierSlots();
-  renderMyBookings();
-  showAlert('bookAlert', '✅ تم تعديل الحجز', 'success');
 }
 
 function cancelMyBooking(groupId) {
@@ -2665,12 +2391,9 @@ function pickSlot(el, time) {
   let whId = document.getElementById('bookingWarehouseSelect').value;
   let available = getSlotAvailableCapacity(whId, date, time);
   
-  if (editBookingGroupId) {
+  if (requestedUnits > available) {
     btn.disabled = false;
-    btn.textContent = 'حفظ التعديل';
-  } else if (requestedUnits > available) {
-    btn.disabled = false;
-    btn.textContent = `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
+    btn.textContent = `�� سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
   } else if (requestedUnits === available && available > 0) {
     btn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
   } else {
@@ -2694,16 +2417,15 @@ function supplierHasBookingOnDate(supplierName, dateStr) {
 
 async function submitBooking() {
   if (!currentSupplierData) { showAlert('bookAlert', 'خطأ في تسجيل الدخول', 'error'); return; }
-  if (editBookingGroupId) { saveEditedMyBooking(); return; }
   
   let supplier = document.getElementById('supName').value.trim();
-  // supplier_admin can book for any supplier name that exists in قاعدة البيانات (Suppliers tab)
+  // supplier_admin can book for any supplier name that exists in Google Sheet (Suppliers tab)
   if (isSupplierAdminUser(currentSupplierData)) {
     if (!supplier) { showAlert('bookAlert', 'يرجى كتابة اسم المورد', 'error'); return; }
     const list = Array.isArray(remoteSuppliers) ? remoteSuppliers : [];
     const ok = list.some(s => String(s.company || '').trim().toLowerCase() === supplier.toLowerCase());
     if (!ok) {
-      showAlert('bookAlert', 'اسم المورد غير موجود', 'error');
+      showAlert('bookAlert', 'اسم المورد غير موجود في جوجل شيت', 'error');
       return;
     }
   } else if (canBookAnySupplierByCode(currentSupplierData)) {
@@ -2714,7 +2436,7 @@ async function submitBooking() {
     }
     const matchByCode = findSupplierByCode(typedCode);
     if (!matchByCode || !String(matchByCode.company || '').trim()) {
-      showAlert('bookAlert', 'كود المورد غير موجود', 'error');
+      showAlert('bookAlert', 'كود المورد غير موجود في جوجل شيت', 'error');
       return;
     }
     supplier = String(matchByCode.company || '').trim();
@@ -2873,7 +2595,7 @@ async function submitBooking() {
 
   saveWarehouseData(whId);
 
-  // Sync to قاعدة البيانات before showing final success.
+  // Sync to Google Sheet before showing final success.
   // If connection fails, keep the booking locally and retry automatically later.
   showLoader('جاري حفظ الحجز...');
   let syncOk = false;
@@ -2891,8 +2613,8 @@ async function submitBooking() {
   renderMyBookings();
 
   let message = syncOk
-    ? `✅ تم تأكيد الحجز وحفظه بنجاح! أرقام الحجز: ${createdIds.join(', ')}`
-    : `⚠️ تم إنشاء رقم الحجز محليًا: ${createdIds.join(', ')} — الاتصال فصل قبل الحفظ النهائي، وسيتم إعادة المحاولة تلقائيًا عند رجوع الاتصال. لا تعيد الحجز مرة أخرى.`;
+    ? `✅ تم تأكيد الحجز وحفظه في Google Sheet! أرقام الحجز: ${createdIds.join(', ')}`
+    : `⚠️ تم إنشاء رقم الحجز محليًا: ${createdIds.join(', ')} — الاتصال فصل قبل الحفظ في Google Sheet، وسيتم إعادة المحاولة تلقائيًا عند رجوع الاتصال. لا تعيد الحجز مرة أخرى.`;
   showAlert('bookAlert', message, 'success');
   
   document.getElementById('supOrder').value = '';
@@ -3219,7 +2941,7 @@ async function doSignup() {
   if (!password) { alert('يرجى إدخال كلمة المرور'); return; }
   if (password !== confirm) { alert('كلمة المرور غير متطابقة'); return; }
 
-  // Ensure latest supplier users loaded from remote data first
+  // Ensure latest supplier users loaded from Sheets first
   try { await loadUsersFromApi(); } catch(e) {}
   if (suppliers.find(s => s.username === username)) { alert('اسم المستخدم موجود بالفعل'); return; }
   if (suppliers.find(s => (s.email||'').toLowerCase() === email)) { alert('البريد الإلكتروني مستخدم بالفعل'); return; }
@@ -3228,7 +2950,7 @@ async function doSignup() {
   suppliers.push({ username, email, password, company, defaultWarehouse: warehouse, createdAt: new Date().toISOString() });
   localStorage.setItem('suppliers', JSON.stringify(suppliers));
 
-  // Save to قاعدة البيانات (shared across devices)
+  // Save to Google Sheets (shared across devices)
   try {
     await apiPost('upsertSupplier', {
       username,
@@ -3375,7 +3097,7 @@ function deleteWarehouseUserRow(idx) {
   if (!confirm('هل تريد حذف هذا المستخدم؟')) return;
   users.splice(idx, 1);
   saveWarehouseUsers(users);
-  // Sync delete to قاعدة البيانات (best-effort)
+  // Sync delete to Google Sheets (best-effort)
   apiGet('deleteWarehouseUser', { username: u.username }).catch(()=>{});
   renderUsersModal();
 }
@@ -3474,7 +3196,7 @@ async function saveSupplierUsersFromModal() {
   saveSupplierUsers(list);
   suppliers = loadSupplierUsers();
 
-  // Sync to قاعدة البيانات via GET (avoids Apps Script POST redirect issue)
+  // Sync to Google Sheets via GET (avoids Apps Script POST redirect issue)
   try {
     showLoader('جاري الحفظ...');
     for (let u of list) {
@@ -3492,11 +3214,11 @@ async function saveSupplierUsersFromModal() {
       if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save supplier');
     }
     await loadUsersFromApi();
-    alert('✅ تم حفظ مستخدمي الموردين بنجاح');
+    alert('✅ تم حفظ مستخدمي الموردين في Google Sheet');
     document.getElementById('supplierUsersModal')?.classList.remove('open');
   } catch (e) {
     console.error(e);
-    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ النهائي. تأكد من رابط الربط والأعمدة.');
+    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ في Google Sheet. تأكد من رابط Apps Script والأعمدة.');
   } finally {
     hideLoader();
   }
@@ -3551,7 +3273,7 @@ async function saveUsersFromModal() {
 
   saveWarehouseUsers(users);
 
-  // Sync to قاعدة البيانات via GET (avoids Apps Script POST redirect issue)
+  // Sync to Google Sheets via GET (avoids Apps Script POST redirect issue)
   try {
     showLoader('جاري الحفظ...');
     for (let u of users) {
@@ -3566,11 +3288,11 @@ async function saveUsersFromModal() {
       if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save warehouse user');
     }
     await loadUsersFromApi();
-    alert('✅ تم حفظ مستخدمي المخازن بنجاح');
+    alert('✅ تم حفظ مستخدمي المخازن في Google Sheet');
     document.getElementById('usersModal')?.classList.remove('open');
   } catch (e) {
     console.error(e);
-    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ النهائي. تأكد من رابط الربط والأعمدة.');
+    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ في Google Sheet. تأكد من رابط Apps Script والأعمدة.');
   } finally {
     hideLoader();
   }
@@ -3766,7 +3488,7 @@ async function doLogin() {
   let pass = normalizePassword(document.getElementById('loginPass').value);
   let err = document.getElementById('loginError');
 
-  // Always load latest users from قاعدة البيانات before attempting login
+  // Always load latest users from Google Sheets before attempting login
   try { await loadUsersFromApi(); } catch (e) {}
   
   if (selectedLoginRole === 'warehouse') {
@@ -3820,7 +3542,6 @@ function doLogout() {
   currentSupplierData = null;
   currentWarehouseUserData = null;
   selectedSlot = null;
-  resetBookingEditMode();
   currentWarehouseAccess = 'all';
   stopAutoSync();
   stopIdleTracking();
@@ -3864,7 +3585,7 @@ document.getElementById('supCode').oninput = fillSupplierNameFromCode;
 document.getElementById('supNameSelect').onchange = onSupplierNameDropdownChange;
 document.getElementById('supTruckCount').oninput = checkCapacity;
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
-document.getElementById('exportAllBtn').onclick = exportAllReports;
+document.getElementById('exportAllBtn').onclick = exportAllSheets;
 // Old report buttons were removed from UI; keep functions for backward-compat but don't bind.
 // Supplier signup is disabled
 document.getElementById('closeSignupBtn').onclick = closeSignupModal;
@@ -4347,7 +4068,6 @@ window.closeModal = closeModal;
 window.pickSlot = pickSlot;
 window.completeBooking = completeBooking;
 window.cancelBooking = cancelBooking;
-window.startEditMyBooking = startEditMyBooking;
 window.switchPage = switchPage;
 window.renderBookingsTable = renderBookingsTable;
 window.saveWarehouseUserNote = saveWarehouseUserNote;
@@ -4358,7 +4078,7 @@ initWarehouseData();
 document.getElementById('whDate').value = today();
 
 // Restore session after refresh
-// Restore session after refresh (ensure latest users are loaded from remote data first)
+// Restore session after refresh (ensure latest users are loaded from Sheets first)
 (async function restoreSession() {
   // Keep loader visible during refresh to avoid flashing the login/main screens
   const st = loadSessionState();
