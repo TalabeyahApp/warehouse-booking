@@ -444,7 +444,7 @@ function closeSignupModal(){
     <div style="overflow:auto;max-height:320px">
       <table class="preview-table" style="margin-top:0">
         <thead>
-          <tr><th>المستخدم</th><th>البريد</th><th>كلمة المرور</th><th>كود المورد</th><th>اسم الشركة</th><th>المخزن الافتراضي</th><th>ادمن؟</th><th></th></tr>
+          <tr><th>المستخدم</th><th>البريد</th><th>كلمة المرور</th><th>كود المورد</th><th>اسم الشركة</th><th>المخزن الافتراضي</th><th>ادمن؟</th><th>يحجز بالكود؟</th><th></th></tr>
         </thead>
         <tbody id="supplierUsersTbody"></tbody>
       </table>
@@ -870,6 +870,22 @@ function isSupplierAdminUser(u) {
   }
 }
 
+function canBookAnySupplierByCode(u) {
+  // Non-admin supplier permission: can book for any supplier by supplier code,
+  // but remains subject to normal supplier restrictions (no same-day booking).
+  try {
+    if (!u) return false;
+    // Keep Reham enabled for backward compatibility.
+    if (String(u.username || '').trim().toLowerCase() === 'reham') return true;
+    const v = u.canBookBySupplierCode ?? u.canbookbysuppliercode ?? u.bookBySupplierCode ?? u.bookbysuppliercode;
+    if (v === true) return true;
+    const s = String(v || '').trim().toLowerCase();
+    return (s === '1' || s === 'true' || s === 'yes' || s === 'y');
+  } catch(e) {
+    return false;
+  }
+}
+
 // Truck type weights (capacity consumption)
 const TRUCK_TYPE_WEIGHTS = {
   'دبابة نص حمولة': 0.5,
@@ -971,6 +987,7 @@ async function loadUsersFromApi() {
         company: x.company || '',
         defaultWarehouse: x.defaultWarehouse || x.defaultwarehouse || 'warehouse1',
         isAdmin: (String(x.isAdmin || x.isadmin || '').toLowerCase() === 'true') || (x.isAdmin === true) || (x.isadmin === true),
+        canBookBySupplierCode: (String(x.canBookBySupplierCode || x.canbookbysuppliercode || x.bookBySupplierCode || x.bookbysuppliercode || '').toLowerCase() === 'true') || (x.canBookBySupplierCode === true) || (x.canbookbysuppliercode === true) || (x.bookBySupplierCode === true) || (x.bookbysuppliercode === true),
         updatedAt: x.updatedAt || x.updatedat || '',
         createdAt: x.createdAt || x.createdat || '',
       }));
@@ -1082,14 +1099,17 @@ function findSupplierByCode(code) {
 
 function fillSupplierNameFromCode() {
   try {
-    if (!isSupplierAdminUser(currentSupplierData)) return;
     const code = document.getElementById('supCode')?.value || '';
     const supNameEl = document.getElementById('supName');
     const sel = document.getElementById('supNameSelect');
     if (!supNameEl) return;
+
+    const canUseAnyCode = isSupplierAdminUser(currentSupplierData) || canBookAnySupplierByCode(currentSupplierData);
+    if (!canUseAnyCode) return;
+
     const match = findSupplierByCode(code);
     supNameEl.value = match ? (match.company || '') : '';
-    if (sel && match) sel.value = match.company || '';
+    if (sel && match && isSupplierAdminUser(currentSupplierData)) sel.value = match.company || '';
   } catch(e) {}
 }
 
@@ -2395,6 +2415,20 @@ async function submitBooking() {
       showAlert('bookAlert', 'اسم المورد غير موجود في جوجل شيت', 'error');
       return;
     }
+  } else if (canBookAnySupplierByCode(currentSupplierData)) {
+    const typedCode = String(document.getElementById('supCode')?.value || '').trim();
+    if (!typedCode) {
+      showAlert('bookAlert', 'يرجى إدخال كود المورد', 'error');
+      return;
+    }
+    const matchByCode = findSupplierByCode(typedCode);
+    if (!matchByCode || !String(matchByCode.company || '').trim()) {
+      showAlert('bookAlert', 'كود المورد غير موجود في جوجل شيت', 'error');
+      return;
+    }
+    supplier = String(matchByCode.company || '').trim();
+    const supNameEl = document.getElementById('supName');
+    if (supNameEl) supNameEl.value = supplier;
   }
   let orderNum = document.getElementById('supOrder').value.trim();
   let goodsType = document.getElementById('supType').value;
@@ -3083,6 +3117,9 @@ function renderSupplierUsersModal() {
       <td style="text-align:center">
         <input type="checkbox" data-sup-idx="${idx}" data-field="isAdmin" ${u.isAdmin ? 'checked' : ''}>
       </td>
+      <td style="text-align:center">
+        <input type="checkbox" data-sup-idx="${idx}" data-field="canBookBySupplierCode" ${u.canBookBySupplierCode ? 'checked' : ''}>
+      </td>
       <td><button class="btn-sm btn-cancel" type="button" onclick="deleteSupplierUserRow(${idx})">حذف</button></td>
     </tr>`;
   }).join('');
@@ -3104,7 +3141,7 @@ function openSupplierUsersModal() {
 
 function addSupplierUserRow() {
   let list = loadSupplierUsers();
-  list.push({ username: '', email: '', password: '', supplierCode: '', company: '', defaultWarehouse: 'warehouse1', isAdmin: false, createdAt: new Date().toISOString() });
+  list.push({ username: '', email: '', password: '', supplierCode: '', company: '', defaultWarehouse: 'warehouse1', isAdmin: false, canBookBySupplierCode: false, createdAt: new Date().toISOString() });
   saveSupplierUsers(list);
   suppliers = loadSupplierUsers();
   renderSupplierUsersModal();
@@ -3158,6 +3195,7 @@ async function saveSupplierUsersFromModal() {
         company: u.company,
         defaultWarehouse: u.defaultWarehouse || 'warehouse1',
         isAdmin: u.isAdmin ? true : false,
+        canBookBySupplierCode: u.canBookBySupplierCode ? true : false,
         updatedAt: nowIso(),
       });
       if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save supplier');
@@ -3366,11 +3404,12 @@ function applySupplierLogin(match) {
   currentSupplierData = match;
   document.getElementById('topbarNav').innerHTML = `<button class="tab-btn active" onclick="switchPage('supplier')">🚚 بوابة المورد</button>`;
   const isSupplierAdmin = isSupplierAdminUser(match);
+  const canUseAnyCode = isSupplierAdmin || canBookAnySupplierByCode(match);
   document.getElementById('userPillLabel').textContent = match.username || '—';
   const supCodeGroup = document.getElementById('supCodeGroup');
   const supCodeEl = document.getElementById('supCode');
   const supNameSelect = document.getElementById('supNameSelect');
-  if (supCodeGroup) supCodeGroup.style.display = isSupplierAdmin ? 'block' : 'none';
+  if (supCodeGroup) supCodeGroup.style.display = canUseAnyCode ? 'block' : 'none';
   if (supCodeEl) supCodeEl.value = '';
   if (supNameSelect) {
     supNameSelect.style.display = isSupplierAdmin ? 'block' : 'none';
@@ -3382,6 +3421,11 @@ function applySupplierLogin(match) {
     if (isSupplierAdmin) {
       supNameEl.readOnly = true;
       supNameEl.style.display = 'none';
+      supNameEl.style.background = '#f0f0ec';
+      supNameEl.value = '';
+    } else if (canBookAnySupplierByCode(match)) {
+      supNameEl.readOnly = true;
+      supNameEl.style.display = 'block';
       supNameEl.style.background = '#f0f0ec';
       supNameEl.value = '';
     } else {
