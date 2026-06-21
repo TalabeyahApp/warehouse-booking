@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>نظام حجز استلامات المخازن</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- Google Apps Script API (Sheets backend) -->
+<!-- Remote API (backend) -->
 <script>
   const API_URL = "https://script.google.com/macros/s/AKfycbxQdTlYfYmKHFqM6Lz1VmgcySQIsRvmIGok6_RnxXgqWZQyfnm_mt4uV__0vZWmeRuhsw/exec";
   async function apiGet(action, params = {}) {
@@ -37,7 +37,7 @@
       return res;
     }
 
-    // Google Apps Script Web App often responds with 302 to a googleusercontent.com URL.
+    // Remote API Web App often responds with 302 to a googleusercontent.com URL.
     // Browsers convert POST -> GET on 302, which drops the body, so writes won't happen.
     // Fix: follow redirect manually and re-POST to the Location.
     let res = await doPost(API_URL);
@@ -952,7 +952,7 @@ function saveSupplierUsers(users) {
 // Initialize suppliers from storage
 suppliers = loadSupplierUsers();
 
-// ==================== USERS SYNC (Google Sheets) ====================
+// ==================== USERS SYNC (قاعدة البيانات) ====================
 let remoteWarehouseUsers = null;
 let remoteSuppliers = null;
 
@@ -964,7 +964,7 @@ async function loadUsersFromApi() {
     ]);
     if (wRes && wRes.ok && Array.isArray(wRes.data)) {
       remoteWarehouseUsers = wRes.data;
-      // Keep local modal data in sync with Google Sheet, including deleted rows
+      // Keep local modal data in sync with قاعدة البيانات, including deleted rows
       if (remoteWarehouseUsers.length) {
         saveWarehouseUsers(remoteWarehouseUsers.map(u => ({
           username: u.username || '',
@@ -978,7 +978,7 @@ async function loadUsersFromApi() {
     if (sRes && sRes.ok && Array.isArray(sRes.data)) {
       remoteSuppliers = sRes.data;
       // If supplier users exist remotely, use them for login and modal rendering.
-      // This also removes rows locally when they were deleted directly from Google Sheet.
+      // This also removes rows locally when they were deleted directly from قاعدة البيانات.
       suppliers = remoteSuppliers.map(x => ({
         username: x.username || '',
         email: x.email || '',
@@ -1212,7 +1212,7 @@ async function loadWarehouseDataFromApi() {
       try {
         const d = new Date(v);
         if (isNaN(d.getTime())) return '';
-        // IMPORTANT: Google Sheets often returns time-only cells as Date objects.
+        // IMPORTANT: قاعدة البيانات often returns time-only cells as Date objects.
         // When serialized to ISO they are shifted to UTC. We must read as UTC here
         // so the time stays consistent across devices.
         const hh = String(d.getUTCHours()).padStart(2,'0');
@@ -1277,7 +1277,7 @@ async function loadWarehouseDataFromApi() {
       warehouseData[whId].blockedSlots.push(getSlotKey(date, time));
     });
 
-    // capacity overrides (prefer parsing from id to avoid Sheets time/date coercion)
+    // capacity overrides (prefer parsing from id to avoid time/date coercion)
     (caps || []).forEach(x => {
       const whId = x.warehouseId || x.warehouse || x.warehouseid;
       let date = '';
@@ -1413,7 +1413,7 @@ async function refreshDataWithLoaderSafe() {
   } catch(e) {
     console.error(e);
     try { hideLoader(); } catch(_) {}
-    alert('تعذر تحميل البيانات. تأكد من رابط Google Apps Script (exec) وأن ping يرجع JSON.');
+    alert('تعذر تحميل البيانات. تأكد من رابط Remote API (exec) وأن ping يرجع JSON.');
     return false;
   }
 }
@@ -1429,7 +1429,7 @@ const PENDING_BOOKING_SYNC_KEY = 'pendingBookingSync';
 function bookingApiPayload(whId, booking) {
   const dateStr = (booking.date || '').trim();
   const timeStr = (booking.time || '').trim();
-  // Force Sheets to store as text to avoid timezone / 1899-date conversions
+  // Force storage to store as text to avoid timezone / 1899-date conversions
   const sheetDate = dateStr ? ("'" + dateStr) : '';
   const sheetTime = timeStr ? ("'" + timeStr) : '';
   const payload = {
@@ -1647,7 +1647,7 @@ function downloadExcel(sheets, filename) {
 }
 
 // Export all reports in one file (used by top button)
-function exportAllSheets() {
+function exportAllReports() {
   let whFilter = document.getElementById('reportsWarehouseFilter')?.value || '';
   // Bookings
   let bookingsList = getAllBookings(whFilter);
@@ -1813,24 +1813,25 @@ function checkCapacity() {
     return;
   }
   
-  let available = getSlotAvailableCapacity(whId, date, time);
+  let available = editBookingGroupId ? getSlotAvailableCapacityExcludingGroup(whId, date, time, editBookingGroupId) : getSlotAvailableCapacity(whId, date, time);
+  const actionText = editBookingGroupId ? 'حفظ التعديل' : `✓ احجز الساعة ${time}`;
   
   if (requestedUnits > available) {
     // Do NOT block booking; spillover logic in submitBooking will distribute across next slots.
     errorMsg.classList.remove('show');
     warningMsg.classList.add('show');
     bookBtn.disabled = false;
-    bookBtn.textContent = `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
+    bookBtn.textContent = editBookingGroupId ? `حفظ التعديل - سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)` : `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
   } else if (requestedUnits === available && available > 0) {
     errorMsg.classList.remove('show');
     warningMsg.classList.add('show');
     bookBtn.disabled = false;
-    bookBtn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
+    bookBtn.textContent = editBookingGroupId ? `حفظ التعديل (آخر ${fmtCap(Math.max(available,0))} وحدة)` : `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
   } else {
     errorMsg.classList.remove('show');
     warningMsg.classList.remove('show');
     bookBtn.disabled = false;
-    bookBtn.textContent = `✓ احجز الساعة ${time}`;
+    bookBtn.textContent = actionText;
   }
 }
 
@@ -1960,7 +1961,7 @@ function toggleBlock(date, time) {
     isBlockedNow = true;
   }
   saveWarehouseData(whId);
-  // Sync to Sheets
+  // Sync shared data
   upsertBlockedSlotToApi(whId, date, time, isBlockedNow);
   renderWarehouse();
 }
@@ -1982,7 +1983,7 @@ function editSlotCapacity(date, time) {
   if (!v) {
     delete warehouseData[whId].slotCapacityOverrides[key];
     saveWarehouseData(whId);
-    // Sync delete to Sheets so all users fall back to default capacity
+    // Sync delete to remote storage so all users fall back to default capacity
     try {
       showLoader('جاري التحميل...');
       apiGet('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` })
@@ -1999,7 +2000,7 @@ function editSlotCapacity(date, time) {
   }
   warehouseData[whId].slotCapacityOverrides[key] = n;
   saveWarehouseData(whId);
-  // Sync to Sheets (shared)
+  // Sync to shared
   try {
     showLoader('جاري التحميل...');
     apiGet('upsertSlotCapacityOverride', {
@@ -2071,12 +2072,13 @@ let editBookingGroupId = null;
 function renderSupplierSlots() {
   let date = document.getElementById('supDate').value;
   let whId = document.getElementById('bookingWarehouseSelect').value;
+  const isEditMode = !!editBookingGroupId;
   
   if (!date || !currentSupplierData) return;
-  selectedSlot = null;
+  if (!isEditMode) selectedSlot = null;
   let btn = document.getElementById('bookBtn');
-  btn.disabled = editBookingGroupId ? false : true;
-  btn.textContent = editBookingGroupId ? 'حفظ التعديل' : 'اختر الوقت أولاً ↓';
+  btn.disabled = isEditMode ? false : true;
+  btn.textContent = isEditMode ? 'حفظ التعديل' : 'اختر الوقت أولاً ↓';
   
   let warningMsg = document.getElementById('capacityWarningMsg');
   let errorMsg = document.getElementById('capacityErrorMsg');
@@ -2096,8 +2098,15 @@ function renderSupplierSlots() {
   let grid = document.getElementById('supplierSlots');
   grid.innerHTML = SLOTS_PER_DAY.map(time => {
     let st = slotStatus(whId, date, time);
-    let bookedCount = getSlotBookedCount(whId, date, time);
-    let available = slotCapacity(whId, date, time) - bookedCount;
+    let available = slotCapacity(whId, date, time) - getSlotBookedCount(whId, date, time);
+    if (isEditMode) {
+      available = getSlotAvailableCapacityExcludingGroup(whId, date, time, editBookingGroupId);
+      if (isPastSlot(date, time)) st = 'past';
+      else if (isBlocked(whId, date, time)) st = 'blocked';
+      else if (available <= 0) st = 'full';
+      else if (available <= 1) st = 'warning';
+      else st = 'available';
+    }
     let taken = (st === 'blocked' || st === 'full' || st === 'past');
     let cap = '';
     let extraClass = '';
@@ -2127,7 +2136,8 @@ function renderSupplierSlots() {
     }
 
     let onclickAttr = (!taken && st !== 'full') ? `onclick="pickSlot(this,'${time}')"` : '';
-    return `<div class="slot-pick ${taken?'taken':''} ${extraClass}" data-time="${time}" ${onclickAttr}>
+    const selectedClass = (isEditMode && selectedSlot === time) ? 'selected' : '';
+    return `<div class="slot-pick ${taken?'taken':''} ${extraClass} ${selectedClass}" data-time="${time}" ${onclickAttr}>
       <div class="sp-time">${slotDisplayLabel(time)}</div>
       <div class="sp-cap">${cap}</div>
       <div class="sp-capacity ${extraClass}">🚛 سعة ${slotCapacity(whId, date, time)}</div>
@@ -2316,21 +2326,21 @@ function startEditMyBooking(groupId) {
   document.getElementById('supCartons').value = targets.reduce((sum,x)=>sum+(parseInt(x.b.cartons)||0),0) || 1;
   document.getElementById('supDate').value = first.date || '';
   document.getElementById('supNotes').value = first.notes || '';
+  selectedSlot = first.time || null;
 
-  // Editing can include date, warehouse, truck count and cartons.
+  // Editing can include date, warehouse, slot, truck count and cartons.
   ['supDate','bookingWarehouseSelect','supTruckCount','supCartons'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { el.disabled = false; el.style.opacity = 1; el.style.cursor = ''; }
   });
   renderSupplierSlots();
-  selectedSlot = first.time || null;
   if (selectedSlot) {
     const slotEl = document.querySelector(`.slot-pick[data-time="${selectedSlot}"]`);
     if (slotEl && !slotEl.classList.contains('taken')) slotEl.classList.add('selected');
   }
   const btn = document.getElementById('bookBtn');
   if (btn) { btn.disabled = false; btn.textContent = 'حفظ التعديل'; }
-  showAlert('bookAlert', 'يمكنك تعديل بيانات الحجز بما فيها التاريخ والمخزن وعدد العربيات والكراتين ثم الضغط على حفظ التعديل.', 'success');
+  showAlert('bookAlert', 'يمكنك تعديل بيانات الحجز بما فيها التاريخ والمخزن والسلوت وعدد العربيات والكراتين ثم الضغط على حفظ التعديل.', 'success');
 }
 
 function saveEditedMyBooking() {
@@ -2648,9 +2658,12 @@ function pickSlot(el, time) {
   let whId = document.getElementById('bookingWarehouseSelect').value;
   let available = getSlotAvailableCapacity(whId, date, time);
   
-  if (requestedUnits > available) {
+  if (editBookingGroupId) {
     btn.disabled = false;
-    btn.textContent = `�� سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
+    btn.textContent = 'حفظ التعديل';
+  } else if (requestedUnits > available) {
+    btn.disabled = false;
+    btn.textContent = `↪ سيتم استكمال المتبقي تلقائياً (المتاح الآن: ${fmtCap(Math.max(available,0))} وحدة)`;
   } else if (requestedUnits === available && available > 0) {
     btn.textContent = `⚠️ احجز الساعة ${time} (آخر ${fmtCap(Math.max(available,0))} وحدة)`;
   } else {
@@ -2677,13 +2690,13 @@ async function submitBooking() {
   if (editBookingGroupId) { saveEditedMyBooking(); return; }
   
   let supplier = document.getElementById('supName').value.trim();
-  // supplier_admin can book for any supplier name that exists in Google Sheet (Suppliers tab)
+  // supplier_admin can book for any supplier name that exists in قاعدة البيانات (Suppliers tab)
   if (isSupplierAdminUser(currentSupplierData)) {
     if (!supplier) { showAlert('bookAlert', 'يرجى كتابة اسم المورد', 'error'); return; }
     const list = Array.isArray(remoteSuppliers) ? remoteSuppliers : [];
     const ok = list.some(s => String(s.company || '').trim().toLowerCase() === supplier.toLowerCase());
     if (!ok) {
-      showAlert('bookAlert', 'اسم المورد غير موجود في جوجل شيت', 'error');
+      showAlert('bookAlert', 'اسم المورد غير موجود', 'error');
       return;
     }
   } else if (canBookAnySupplierByCode(currentSupplierData)) {
@@ -2694,7 +2707,7 @@ async function submitBooking() {
     }
     const matchByCode = findSupplierByCode(typedCode);
     if (!matchByCode || !String(matchByCode.company || '').trim()) {
-      showAlert('bookAlert', 'كود المورد غير موجود في جوجل شيت', 'error');
+      showAlert('bookAlert', 'كود المورد غير موجود', 'error');
       return;
     }
     supplier = String(matchByCode.company || '').trim();
@@ -2853,7 +2866,7 @@ async function submitBooking() {
 
   saveWarehouseData(whId);
 
-  // Sync to Google Sheet before showing final success.
+  // Sync to قاعدة البيانات before showing final success.
   // If connection fails, keep the booking locally and retry automatically later.
   showLoader('جاري حفظ الحجز...');
   let syncOk = false;
@@ -2871,8 +2884,8 @@ async function submitBooking() {
   renderMyBookings();
 
   let message = syncOk
-    ? `✅ تم تأكيد الحجز وحفظه في Google Sheet! أرقام الحجز: ${createdIds.join(', ')}`
-    : `⚠️ تم إنشاء رقم الحجز محليًا: ${createdIds.join(', ')} — الاتصال فصل قبل الحفظ في Google Sheet، وسيتم إعادة المحاولة تلقائيًا عند رجوع الاتصال. لا تعيد الحجز مرة أخرى.`;
+    ? `✅ تم تأكيد الحجز وحفظه بنجاح! أرقام الحجز: ${createdIds.join(', ')}`
+    : `⚠️ تم إنشاء رقم الحجز محليًا: ${createdIds.join(', ')} — الاتصال فصل قبل الحفظ النهائي، وسيتم إعادة المحاولة تلقائيًا عند رجوع الاتصال. لا تعيد الحجز مرة أخرى.`;
   showAlert('bookAlert', message, 'success');
   
   document.getElementById('supOrder').value = '';
@@ -3199,7 +3212,7 @@ async function doSignup() {
   if (!password) { alert('يرجى إدخال كلمة المرور'); return; }
   if (password !== confirm) { alert('كلمة المرور غير متطابقة'); return; }
 
-  // Ensure latest supplier users loaded from Sheets first
+  // Ensure latest supplier users loaded from remote data first
   try { await loadUsersFromApi(); } catch(e) {}
   if (suppliers.find(s => s.username === username)) { alert('اسم المستخدم موجود بالفعل'); return; }
   if (suppliers.find(s => (s.email||'').toLowerCase() === email)) { alert('البريد الإلكتروني مستخدم بالفعل'); return; }
@@ -3208,7 +3221,7 @@ async function doSignup() {
   suppliers.push({ username, email, password, company, defaultWarehouse: warehouse, createdAt: new Date().toISOString() });
   localStorage.setItem('suppliers', JSON.stringify(suppliers));
 
-  // Save to Google Sheets (shared across devices)
+  // Save to قاعدة البيانات (shared across devices)
   try {
     await apiPost('upsertSupplier', {
       username,
@@ -3355,7 +3368,7 @@ function deleteWarehouseUserRow(idx) {
   if (!confirm('هل تريد حذف هذا المستخدم؟')) return;
   users.splice(idx, 1);
   saveWarehouseUsers(users);
-  // Sync delete to Google Sheets (best-effort)
+  // Sync delete to قاعدة البيانات (best-effort)
   apiGet('deleteWarehouseUser', { username: u.username }).catch(()=>{});
   renderUsersModal();
 }
@@ -3454,7 +3467,7 @@ async function saveSupplierUsersFromModal() {
   saveSupplierUsers(list);
   suppliers = loadSupplierUsers();
 
-  // Sync to Google Sheets via GET (avoids Apps Script POST redirect issue)
+  // Sync to قاعدة البيانات via GET (avoids Apps Script POST redirect issue)
   try {
     showLoader('جاري الحفظ...');
     for (let u of list) {
@@ -3472,11 +3485,11 @@ async function saveSupplierUsersFromModal() {
       if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save supplier');
     }
     await loadUsersFromApi();
-    alert('✅ تم حفظ مستخدمي الموردين في Google Sheet');
+    alert('✅ تم حفظ مستخدمي الموردين بنجاح');
     document.getElementById('supplierUsersModal')?.classList.remove('open');
   } catch (e) {
     console.error(e);
-    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ في Google Sheet. تأكد من رابط Apps Script والأعمدة.');
+    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ النهائي. تأكد من رابط الربط والأعمدة.');
   } finally {
     hideLoader();
   }
@@ -3531,7 +3544,7 @@ async function saveUsersFromModal() {
 
   saveWarehouseUsers(users);
 
-  // Sync to Google Sheets via GET (avoids Apps Script POST redirect issue)
+  // Sync to قاعدة البيانات via GET (avoids Apps Script POST redirect issue)
   try {
     showLoader('جاري الحفظ...');
     for (let u of users) {
@@ -3546,11 +3559,11 @@ async function saveUsersFromModal() {
       if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save warehouse user');
     }
     await loadUsersFromApi();
-    alert('✅ تم حفظ مستخدمي المخازن في Google Sheet');
+    alert('✅ تم حفظ مستخدمي المخازن بنجاح');
     document.getElementById('usersModal')?.classList.remove('open');
   } catch (e) {
     console.error(e);
-    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ في Google Sheet. تأكد من رابط Apps Script والأعمدة.');
+    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ النهائي. تأكد من رابط الربط والأعمدة.');
   } finally {
     hideLoader();
   }
@@ -3746,7 +3759,7 @@ async function doLogin() {
   let pass = normalizePassword(document.getElementById('loginPass').value);
   let err = document.getElementById('loginError');
 
-  // Always load latest users from Google Sheets before attempting login
+  // Always load latest users from قاعدة البيانات before attempting login
   try { await loadUsersFromApi(); } catch (e) {}
   
   if (selectedLoginRole === 'warehouse') {
@@ -3844,7 +3857,7 @@ document.getElementById('supCode').oninput = fillSupplierNameFromCode;
 document.getElementById('supNameSelect').onchange = onSupplierNameDropdownChange;
 document.getElementById('supTruckCount').oninput = checkCapacity;
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
-document.getElementById('exportAllBtn').onclick = exportAllSheets;
+document.getElementById('exportAllBtn').onclick = exportAllReports;
 // Old report buttons were removed from UI; keep functions for backward-compat but don't bind.
 // Supplier signup is disabled
 document.getElementById('closeSignupBtn').onclick = closeSignupModal;
@@ -4338,7 +4351,7 @@ initWarehouseData();
 document.getElementById('whDate').value = today();
 
 // Restore session after refresh
-// Restore session after refresh (ensure latest users are loaded from Sheets first)
+// Restore session after refresh (ensure latest users are loaded from remote data first)
 (async function restoreSession() {
   // Keep loader visible during refresh to avoid flashing the login/main screens
   const st = loadSessionState();
