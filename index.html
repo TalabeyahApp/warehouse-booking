@@ -303,15 +303,17 @@ tbody tr:hover td{background:#fafaf8}
 <body>
 
 <script>
-  // Fail-safe: if any runtime error happens, stop infinite loader.
+  // Fail-safe: if any runtime error happens, stop infinite loader without logging the user out.
   try {
-    window.addEventListener('error', () => {
+    window.addEventListener('error', (ev) => {
+      console.error(ev?.error || ev?.message || ev);
       try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
-      try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
+      try { document.body.classList.remove('boot-loading'); } catch(_) {}
     });
-    window.addEventListener('unhandledrejection', () => {
+    window.addEventListener('unhandledrejection', (ev) => {
+      console.error(ev?.reason || ev);
       try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
-      try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
+      try { document.body.classList.remove('boot-loading'); } catch(_) {}
     });
   } catch(e) {}
 </script>
@@ -2306,6 +2308,7 @@ function resetBookingEditMode() {
 }
 
 function startEditMyBooking(groupId) {
+  try {
   const targets = getMyBookingTargets(groupId);
   if (!targets.length) return;
   if (!canCurrentSupplierEditTargets(targets)) { alert('لا يمكن تعديل الحجز إلا من خلال اليوزر الذي أنشأه'); return; }
@@ -2341,6 +2344,10 @@ function startEditMyBooking(groupId) {
   const btn = document.getElementById('bookBtn');
   if (btn) { btn.disabled = false; btn.textContent = 'حفظ التعديل'; }
   showAlert('bookAlert', 'يمكنك تعديل بيانات الحجز بما فيها التاريخ والمخزن والسلوت وعدد العربيات والكراتين ثم الضغط على حفظ التعديل.', 'success');
+  } catch(e) {
+    console.error(e);
+    alert('حدث خطأ أثناء فتح التعديل. برجاء تحديث الصفحة والمحاولة مرة أخرى.');
+  }
 }
 
 function saveEditedMyBooking() {
