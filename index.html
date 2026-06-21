@@ -238,6 +238,9 @@ tbody tr:hover td{background:#fafaf8}
 .table-wrap{overflow-x:auto;overflow-y:visible}
 #bookingsTable{min-width:1600px}
 #bookingsTable th:last-child,#bookingsTable td:last-child{min-width:340px}
+.booking-note-input{width:180px;min-height:44px;font-family:var(--font);font-size:12px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;background:var(--surface);resize:vertical}
+.booking-note-input:focus{outline:none;border-color:var(--accent)}
+.booking-note-input:disabled{background:#f4f4f1;color:#777;cursor:not-allowed;opacity:.75}
 .btn-sm{font-family:var(--font);font-size:11px;font-weight:600;padding:4px 10px;border-radius:3px;border:1px solid;cursor:pointer;transition:all .15s}
 .btn-details{background:var(--blue-light);color:var(--blue);border-color:#b5caf5}.btn-details:hover{background:var(--blue);color:#fff}
 .btn-cancel{background:var(--amber-light);color:var(--amber);border-color:#e8d08a}.btn-cancel:hover{background:var(--amber);color:#fff}
@@ -610,7 +613,7 @@ function closeSignupModal(){
     <input type="date" class="date-input" id="filterDate">
     <input type="text" class="date-input" id="filterSearch" placeholder="بحث..." style="flex:1">
   </div>
-  <div class="table-wrap"><table id="bookingsTable"><thead><tr><th>رقم الحجز</th><th>رقم الجروب</th><th>رقم الدور</th><th>المخزن</th><th>المورد</th><th>رقم الأوردر</th><th>التاريخ</th><th>الوقت</th><th>نوع البضاعة</th><th>العربية</th><th>عدد العربيات</th><th>الكراتين</th><th>السيارة/السائق</th><th>وقت الوصول</th><th>وقت الدخول</th><th>وقت الخروج</th><th>الحالة</th><th>تاريخ الحالة</th><th>إجراء</th></tr></thead><tbody id="bookingsTbody"></tbody></table></div>
+  <div class="table-wrap"><table id="bookingsTable"><thead><tr id="bookingsHeaderRow"><th>رقم الحجز</th><th>رقم الجروب</th><th>رقم الدور</th><th>المخزن</th><th>المورد</th><th>رقم الأوردر</th><th>التاريخ</th><th>الوقت</th><th>نوع البضاعة</th><th>العربية</th><th>عدد العربيات</th><th>الكراتين</th><th>السيارة/السائق</th><th>وقت الوصول</th><th>وقت الدخول</th><th>وقت الخروج</th><th>الحالة</th><th>تاريخ الحالة</th><th>إجراء</th></tr></thead><tbody id="bookingsTbody"></tbody></table></div>
 </div>
 
 <!-- REPORTS PAGE -->
@@ -991,6 +994,70 @@ function getWarehouseUsersForLogin() {
   return loadWarehouseUsers();
 }
 
+function escapeHtml(v) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function warehouseNoteColumnKey(access) {
+  return `notes_${String(access || '').trim()}`;
+}
+
+function getWarehouseNoteColumns() {
+  // Notes are grouped by warehouse-user access type, not by username.
+  return [
+    { access: 'single', label: 'ملاحظات مخزن واحد' },
+    { access: 'single_view', label: 'ملاحظات عرض مخزن واحد فقط' },
+  ];
+}
+
+function renderBookingsHeader(noteColumns) {
+  const base = ['رقم الحجز','رقم الجروب','رقم الدور','المخزن','المورد','رقم الأوردر','التاريخ','الوقت','نوع البضاعة','العربية','عدد العربيات','الكراتين','السيارة/السائق','وقت الوصول','وقت الدخول','وقت الخروج','الحالة','تاريخ الحالة'];
+  const noteHeaders = (noteColumns || []).map(c => escapeHtml(c.label || 'ملاحظات'));
+  const html = [...base, ...noteHeaders, 'إجراء'].map(h => `<th>${h}</th>`).join('');
+  const row = document.getElementById('bookingsHeaderRow');
+  if (row) row.innerHTML = html;
+}
+
+function renderBookingNoteCell(b, noteColumn) {
+  const access = String(noteColumn?.access || '').trim();
+  const key = warehouseNoteColumnKey(access);
+  const currentAccess = String(currentWarehouseUserData?.access || currentWarehouseAccess || '').trim();
+  const canEdit = currentRole === 'warehouse' && access && currentAccess === access;
+  const val = escapeHtml(b[key] || '');
+  if (!canEdit) {
+    return `<td>${val ? `<div style="white-space:pre-wrap;min-width:160px">${val}</div>` : '-'}</td>`;
+  }
+  return `<td><textarea class="booking-note-input" data-wh="${escapeHtml(b.warehouseId)}" data-id="${escapeHtml(b.id)}" data-note-access="${escapeHtml(access)}" onblur="saveWarehouseUserNote(this)">${val}</textarea></td>`;
+}
+
+function saveWarehouseUserNote(el) {
+  try {
+    const whId = el.getAttribute('data-wh');
+    const id = el.getAttribute('data-id');
+    const access = el.getAttribute('data-note-access');
+    const currentAccess = String(currentWarehouseUserData?.access || currentWarehouseAccess || '').trim();
+    if (!whId || !id || !access || access !== currentAccess) {
+      alert('لا يمكنك تعديل ملاحظات صلاحية أخرى');
+      renderBookingsTable();
+      return;
+    }
+    const b = warehouseData[whId]?.bookings?.find(x => String(x.id) === String(id));
+    if (!b) return;
+    const key = warehouseNoteColumnKey(access);
+    b[key] = el.value || '';
+    b.statusUpdatedAt = b.statusUpdatedAt || '';
+    saveWarehouseData(whId);
+    upsertBookingToApi(whId, b);
+  } catch(e) {
+    console.error(e);
+  }
+}
+
 function getSuppliersForLogin() {
   if (Array.isArray(remoteSuppliers) && remoteSuppliers.length) {
     return suppliers;
@@ -1071,6 +1138,10 @@ let dataLoadPromise = null;
 
 async function loadWarehouseDataFromApi() {
   try {
+    // Before pulling fresh data, push any locally-created bookings that failed
+    // because the connection dropped after a booking number was generated.
+    await retryPendingBookingSync();
+
     // Load bookings
     const bRes = await apiGet('listBookings');
     const bookings = (bRes && bRes.ok && Array.isArray(bRes.data)) ? bRes.data : [];
@@ -1134,7 +1205,7 @@ async function loadWarehouseDataFromApi() {
     bookings.forEach(b => {
       const whId = b.warehouseId || b.warehouse || b.warehouseid;
       if (!whId || !warehouseData[whId]) return;
-      warehouseData[whId].bookings.push({
+      const bookingObj = {
         id: b.id,
         groupId: b.groupId || b.groupid || '',
         queueNo: b.queueNo || b.queueno || b.queue_no || '',
@@ -1157,11 +1228,17 @@ async function loadWarehouseDataFromApi() {
         adminUnlocked: (String(b.adminUnlocked || b.adminunlocked || '').toLowerCase() === 'true') || (b.adminUnlocked === true) || (b.adminunlocked === true),
         notes: b.notes || '',
         createdAt: b.createdAt || '',
+        createdBy: b.createdBy || b.createdby || '',
+        createdTime: b.createdTime || b.createdtime || '',
         arrivalTime: b.arrivalTime || b.arrivaltime || '',
         checkInTime: b.checkInTime || '',
         checkOutTime: b.checkOutTime || '',
         cancelledAt: b.cancelledAt || '',
+      };
+      Object.keys(b || {}).forEach(k => {
+        if (String(k).startsWith('notes_')) bookingObj[k] = b[k] || '';
       });
+      warehouseData[whId].bookings.push(bookingObj);
     });
 
     blocked.forEach(x => {
@@ -1226,6 +1303,8 @@ async function silentRefreshTick() {
       if (ov && ov.style && ov.style.display !== 'none') return;
     } catch(e) {}
     silentRefreshing = true;
+    // First push any bookings that were created while the connection was down.
+    await retryPendingBookingSync();
     // Force fresh fetch (without loader)
     dataLoadPromise = null;
     await withTimeout(loadWarehouseDataFromApi(), 10000);
@@ -1250,6 +1329,8 @@ async function silentRefreshTick() {
 function startAutoSync() {
   // Silent auto-sync every 30 seconds (no loader)
   stopAutoSync();
+  // Try once shortly after login/refresh, without showing loader.
+  setTimeout(() => { silentRefreshTick(); }, 3000);
   autoSyncTimer = setInterval(() => {
     silentRefreshTick();
   }, 30000);
@@ -1315,42 +1396,93 @@ function saveWarehouseData(whId) {
   localStorage.setItem(`whSlotCaps_${whId}`, JSON.stringify(warehouseData[whId].slotCapacityOverrides || {}));
 }
 
-async function upsertBookingToApi(whId, booking) {
+const PENDING_BOOKING_SYNC_KEY = 'pendingBookingSync';
+
+function bookingApiPayload(whId, booking) {
+  const dateStr = (booking.date || '').trim();
+  const timeStr = (booking.time || '').trim();
+  // Force Sheets to store as text to avoid timezone / 1899-date conversions
+  const sheetDate = dateStr ? ("'" + dateStr) : '';
+  const sheetTime = timeStr ? ("'" + timeStr) : '';
+  const payload = {
+    id: booking.id,
+    groupId: booking.groupId || '',
+    queueNo: booking.queueNo ?? '',
+    warehouseId: whId,
+    supplier: booking.supplier || '',
+    orderNum: booking.orderNum || '',
+    goodsType: booking.goodsType || '',
+    plate: booking.plate || '',
+    driver: booking.driver || '',
+    truckType: booking.truckType || '',
+    truckCount: booking.truckCount || 1,
+    unitsConsumed: booking.unitsConsumed ?? '',
+    cartons: booking.cartons || 1,
+    palletLoading: booking.palletLoading || '',
+    date: sheetDate,
+    time: sheetTime,
+    status: booking.status || '',
+    statusUpdatedAt: booking.statusUpdatedAt || '',
+    adminUnlocked: booking.adminUnlocked ? true : false,
+    createdAt: booking.createdAt || '',
+    createdBy: booking.createdBy || '',
+    createdTime: booking.createdTime || '',
+    arrivalTime: booking.arrivalTime || '',
+    checkInTime: booking.checkInTime || '',
+    checkOutTime: booking.checkOutTime || '',
+    cancelledAt: booking.cancelledAt || '',
+    notes: booking.notes || '',
+  };
+  Object.keys(booking || {}).forEach(k => {
+    if (String(k).startsWith('notes_')) payload[k] = booking[k] || '';
+  });
+  return payload;
+}
+
+function loadPendingBookingSync() {
+  try { return JSON.parse(localStorage.getItem(PENDING_BOOKING_SYNC_KEY) || '[]') || []; } catch(e) { return []; }
+}
+
+function savePendingBookingSync(list) {
+  localStorage.setItem(PENDING_BOOKING_SYNC_KEY, JSON.stringify(list || []));
+}
+
+function queuePendingBookingSync(whId, booking) {
+  const list = loadPendingBookingSync();
+  const payload = bookingApiPayload(whId, booking);
+  const idx = list.findIndex(x => x && x.payload && x.payload.id === payload.id);
+  const item = { id: payload.id, whId, payload, queuedAt: nowIso() };
+  if (idx >= 0) list[idx] = item;
+  else list.push(item);
+  savePendingBookingSync(list);
+}
+
+async function retryPendingBookingSync() {
+  const list = loadPendingBookingSync();
+  if (!list.length) return { ok: true, remaining: 0 };
+  const remaining = [];
+  for (let item of list) {
+    try {
+      const res = await apiGet('upsertBooking', item.payload || {});
+      if (!res || res.ok === false) throw new Error((res && res.error) || 'sync failed');
+    } catch(e) {
+      remaining.push(item);
+    }
+  }
+  savePendingBookingSync(remaining);
+  return { ok: remaining.length === 0, remaining: remaining.length };
+}
+
+async function upsertBookingToApi(whId, booking, options = {}) {
   try {
-    const dateStr = (booking.date || '').trim();
-    const timeStr = (booking.time || '').trim();
-    // Force Sheets to store as text to avoid timezone / 1899-date conversions
-    const sheetDate = dateStr ? ("'" + dateStr) : '';
-    const sheetTime = timeStr ? ("'" + timeStr) : '';
-    await apiPost('upsertBooking', {
-      id: booking.id,
-      groupId: booking.groupId || '',
-      queueNo: booking.queueNo ?? '',
-      warehouseId: whId,
-      supplier: booking.supplier || '',
-      orderNum: booking.orderNum || '',
-      goodsType: booking.goodsType || '',
-      plate: booking.plate || '',
-      driver: booking.driver || '',
-      truckType: booking.truckType || '',
-      truckCount: booking.truckCount || 1,
-      unitsConsumed: booking.unitsConsumed ?? '',
-      cartons: booking.cartons || 1,
-      palletLoading: booking.palletLoading || '',
-      date: sheetDate,
-      time: sheetTime,
-      status: booking.status || '',
-      statusUpdatedAt: booking.statusUpdatedAt || '',
-      adminUnlocked: booking.adminUnlocked ? true : false,
-      createdAt: booking.createdAt || '',
-      arrivalTime: booking.arrivalTime || '',
-      checkInTime: booking.checkInTime || '',
-      checkOutTime: booking.checkOutTime || '',
-      cancelledAt: booking.cancelledAt || '',
-      notes: booking.notes || '',
-    });
+    const res = await apiGet('upsertBooking', bookingApiPayload(whId, booking));
+    if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save booking');
+    return true;
   } catch (e) {
     console.error(e);
+    if (options.queueOnFail !== false) queuePendingBookingSync(whId, booking);
+    if (options.throwOnFail) throw e;
+    return false;
   }
 }
 
@@ -1904,6 +2036,7 @@ function completeBooking(whId, id) {
 
 // ==================== SUPPLIER PAGE ====================
 let currentSupplierData = null;
+let currentWarehouseUserData = null;
 let selectedSlot = null;
 
 function renderSupplierSlots() {
@@ -2241,7 +2374,7 @@ function supplierHasBookingOnDate(supplierName, dateStr) {
   return false;
 }
 
-function submitBooking() {
+async function submitBooking() {
   if (!currentSupplierData) { showAlert('bookAlert', 'خطأ في تسجيل الدخول', 'error'); return; }
   
   let supplier = document.getElementById('supName').value.trim();
@@ -2307,8 +2440,11 @@ function submitBooking() {
   let remainingUnits = totalUnitsRequested;
   let remainingCartons = cartons;
   let createdAt = new Date().toISOString();
+  let createdBy = currentSupplierData?.username || '';
+  let createdTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   let groupId = genBookingId(whId);
   let createdIds = [];
+  let createdBookings = [];
 
   // Compute next queue number per slot (warehouse,date,time)
   // Format: "1 A", "2 A" ... where letter identifies the slot.
@@ -2381,31 +2517,49 @@ function submitBooking() {
       time: slotTime,
       status: 'approved',
       createdAt,
+      createdBy,
+      createdTime,
     };
 
     warehouseData[whId].bookings.push(booking);
     createdIds.push(bookingId);
+    createdBookings.push(booking);
     remainingUnits -= allocateUnits;
     remainingCartons -= allocateCartons;
-
-    // Sync to Sheets
-    upsertBookingToApi(whId, booking);
   }
 
   if (remainingUnits > 0) {
     showAlert('bookAlert', `❌ السعة غير كافية لإكمال الحجز. المتبقي بدون حجز: ${fmtCap(remainingUnits)} عربية.`, 'error');
     // NOTE: For simplicity we don't rollback inserted rows. User can cancel them.
     saveWarehouseData(whId);
+    createdBookings.forEach(b => queuePendingBookingSync(whId, b));
     renderSupplierSlots();
     renderMyBookings();
     return;
   }
 
   saveWarehouseData(whId);
+
+  // Sync to Google Sheet before showing final success.
+  // If connection fails, keep the booking locally and retry automatically later.
+  showLoader('جاري حفظ الحجز...');
+  let syncOk = false;
+  try {
+    const results = [];
+    for (let b of createdBookings) {
+      results.push(await upsertBookingToApi(whId, b, { throwOnFail: false }));
+    }
+    syncOk = results.every(Boolean);
+  } finally {
+    hideLoader();
+  }
+
   renderSupplierSlots();
   renderMyBookings();
 
-  let message = `✅ تم تأكيد الحجز بنجاح! أرقام الحجز: ${createdIds.join(', ')}`;
+  let message = syncOk
+    ? `✅ تم تأكيد الحجز وحفظه في Google Sheet! أرقام الحجز: ${createdIds.join(', ')}`
+    : `⚠️ تم إنشاء رقم الحجز محليًا: ${createdIds.join(', ')} — الاتصال فصل قبل الحفظ في Google Sheet، وسيتم إعادة المحاولة تلقائيًا عند رجوع الاتصال. لا تعيد الحجز مرة أخرى.`;
   showAlert('bookAlert', message, 'success');
   
   document.getElementById('supOrder').value = '';
@@ -2514,8 +2668,11 @@ function renderBookingsTable() {
   if (dateF) list = list.filter(b => b.date === dateF);
   if (search) list = list.filter(b => b.supplier.toLowerCase().includes(search) || b.orderNum.toLowerCase().includes(search));
 
+  const noteColumns = getWarehouseNoteColumns();
+  renderBookingsHeader(noteColumns);
+
   let tbody = document.getElementById('bookingsTbody');
-  if (!list.length) { tbody.innerHTML = `<tr><td colspan="16"><div class="empty-state"><p>لا توجد حجوزات</p></div></td></tr>`; return; }
+  if (!list.length) { tbody.innerHTML = `<tr><td colspan="${19 + noteColumns.length}"><div class="empty-state"><p>لا توجد حجوزات</p></div></td></tr>`; return; }
   let badge = {
     approved:'<span class="badge badge-green">مؤكد</span>',
     completed:'<span class="badge badge-blue">مكتمل</span>',
@@ -2568,6 +2725,7 @@ function renderBookingsTable() {
     <td>${b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '-'}</td>
     <td>${badge[b.status]}</td>
     <td title="${lockReason}">${statusDate}</td>
+    ${noteColumns.map(c => renderBookingNoteCell(b, c)).join('')}
     <td><div class="action-btns">
       <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="openBookingModal('${b.warehouseId}','${b.id}')">تفاصيل</button>
       <button class="btn-sm btn-details" ${commonDis} ${commonStyle} onclick="setArrivalWarehouse('${b.warehouseId}','${b.id}')">وصول</button>
@@ -3128,6 +3286,7 @@ function clearSessionState() {
 
 function applyWarehouseLogin(match) {
   currentRole = 'warehouse';
+  currentWarehouseUserData = match;
   currentWarehouseAccess = match.access || 'all';
   document.getElementById('topbarNav').innerHTML = `
     <button class="tab-btn active" onclick="switchPage('warehouse')">🏭 المخازن</button>
@@ -3195,6 +3354,7 @@ function applyWarehouseLogin(match) {
 
 function applySupplierLogin(match) {
   currentRole = 'supplier';
+  currentWarehouseUserData = null;
   currentSupplierData = match;
   document.getElementById('topbarNav').innerHTML = `<button class="tab-btn active" onclick="switchPage('supplier')">🚚 بوابة المورد</button>`;
   const isSupplierAdmin = isSupplierAdminUser(match);
@@ -3315,6 +3475,7 @@ function getActivePageId() {
 function doLogout() {
   currentRole = null;
   currentSupplierData = null;
+  currentWarehouseUserData = null;
   selectedSlot = null;
   currentWarehouseAccess = 'all';
   stopAutoSync();
@@ -3379,6 +3540,13 @@ document.getElementById('exportBookingsBtn').onclick = exportBookingsReport;
 document.getElementById('exportGoodsBtn').onclick = exportGoodsTypeReport;
 document.getElementById('exportSupBtn').onclick = exportSupplierSummary;
 document.getElementById('exportTruckBtn').onclick = exportTruckTypeReport;
+
+// If internet comes back after a disconnect, retry pending booking saves immediately.
+try {
+  window.addEventListener('online', () => {
+    retryPendingBookingSync().then(() => silentRefreshTick()).catch(()=>{});
+  });
+} catch(e) {}
 
 // Warehouse users management (admin)
 document.getElementById('saveUsersBtn').onclick = saveUsersFromModal;
@@ -3831,6 +3999,7 @@ window.completeBooking = completeBooking;
 window.cancelBooking = cancelBooking;
 window.switchPage = switchPage;
 window.renderBookingsTable = renderBookingsTable;
+window.saveWarehouseUserNote = saveWarehouseUserNote;
 window.checkCapacity = checkCapacity;
 
 // Initialize
