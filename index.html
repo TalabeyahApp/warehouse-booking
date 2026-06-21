@@ -2142,18 +2142,20 @@ function renderMyBookings() {
   let toStr = (document.getElementById('myBookingsTo')?.value || '').trim();
   let supplierFilter = (document.getElementById('myBookingsSupplier')?.value || '').trim().toLowerCase();
   const isSupplierAdmin = isSupplierAdminUser(currentSupplierData);
+  const canBookByCode = canBookAnySupplierByCode(currentSupplierData);
+  const canSeeAllSuppliers = isSupplierAdmin || canBookByCode;
   // Supplier name used in bookings is the company name
   let supplierName = (currentSupplierData.company || document.getElementById('supName')?.value || '').trim();
   let all = [];
   for (let whId in warehouseData) {
     (warehouseData[whId]?.bookings || []).forEach(b => {
       const sameSupplier = ((b.supplier || '').trim() === supplierName);
-      const allowed = isSupplierAdmin ? true : sameSupplier;
+      const allowed = canSeeAllSuppliers ? true : sameSupplier;
       if (!allowed) return;
       const d = (b.date || '').trim();
       if (fromStr && d && d < fromStr) return;
       if (toStr && d && d > toStr) return;
-      if (isSupplierAdmin && supplierFilter) {
+      if (canSeeAllSuppliers && supplierFilter) {
         const s = String(b.supplier || '').trim().toLowerCase();
         if (!s.includes(supplierFilter)) return;
       }
@@ -2241,6 +2243,17 @@ function cancelMyBooking(groupId) {
     });
   }
   if (!targets.length) return;
+
+  // Supplier permission check: supplier_admin and users with canBookBySupplierCode can cancel any supplier booking.
+  // Normal suppliers can only cancel their own company bookings.
+  const canCancelAnySupplier = isSupplierAdminUser(currentSupplierData) || canBookAnySupplierByCode(currentSupplierData);
+  if (!canCancelAnySupplier) {
+    const supplierName = String(currentSupplierData?.company || '').trim();
+    if (!supplierName || targets.some(x => String(x.b.supplier || '').trim() !== supplierName)) {
+      alert('لا يمكنك إلغاء حجز مورد آخر');
+      return;
+    }
+  }
 
   // Re-check rules using the latest local data
   if (targets.some(x => !!x.b.checkInTime)) {
@@ -3444,10 +3457,10 @@ function applySupplierLogin(match) {
   let myTo = document.getElementById('myBookingsTo');
   if (myFrom && !myFrom.value) myFrom.value = today();
   if (myTo && !myTo.value) myTo.value = today();
-  // supplier filter visible only for supplier_admin
+  // supplier filter visible for supplier_admin and users allowed to book by supplier code
   try {
     const supF = document.getElementById('myBookingsSupplier');
-    if (supF) supF.style.display = isSupplierAdminUser(match) ? 'block' : 'none';
+    if (supF) supF.style.display = (isSupplierAdminUser(match) || canBookAnySupplierByCode(match)) ? 'block' : 'none';
   } catch(e) {}
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('topbar').style.display = 'flex';
