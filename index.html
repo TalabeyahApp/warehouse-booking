@@ -2066,6 +2066,7 @@ function completeBooking(whId, id) {
 let currentSupplierData = null;
 let currentWarehouseUserData = null;
 let selectedSlot = null;
+let editBookingGroupId = null;
 
 function renderSupplierSlots() {
   let date = document.getElementById('supDate').value;
@@ -2074,8 +2075,8 @@ function renderSupplierSlots() {
   if (!date || !currentSupplierData) return;
   selectedSlot = null;
   let btn = document.getElementById('bookBtn');
-  btn.disabled = true;
-  btn.textContent = 'اختر الوقت أولاً ↓';
+  btn.disabled = editBookingGroupId ? false : true;
+  btn.textContent = editBookingGroupId ? 'حفظ التعديل' : 'اختر الوقت أولاً ↓';
   
   let warningMsg = document.getElementById('capacityWarningMsg');
   let errorMsg = document.getElementById('capacityErrorMsg');
@@ -2196,6 +2197,10 @@ function renderMyBookings() {
     let tooLate = (minsToStart !== null && minsToStart <= 30);
     let cancelAllowed = canCancel && !hasCheckIn && !tooLate;
     let cancelReason = hasCheckIn ? 'تم تسجيل الدخول بالمخزن' : (tooLate ? 'تبقى أقل من 30 دقيقة على بداية الموعد' : '');
+    const currentUsername = String(currentSupplierData?.username || '').trim().toLowerCase();
+    const createdBySameUser = parts.every(p => String(p.createdBy || '').trim().toLowerCase() === currentUsername);
+    const editBlockedReason = date === today() ? 'لا يمكن تعديل حجز نفس اليوم' : (hasCheckIn ? 'لا يمكن التعديل بعد تسجيل الدخول' : (!createdBySameUser ? 'لا يمكن تعديل الحجز إلا من خلال اليوزر الذي أنشأه' : ''));
+    const editAllowed = !!createdBySameUser && date !== today() && !hasCheckIn;
     // Show queue number for the first slot (or '-')
     let q = parts[0].queueNo || '-';
     return `<tr>
@@ -2210,6 +2215,7 @@ function renderMyBookings() {
         <div class="action-btns">
           <button class="btn-sm btn-details" type="button" onclick="trackMyBooking('${g.groupId}')">تتبع</button>
           <button class="btn-sm btn-details" type="button" onclick="setArrivalSupplier('${g.groupId}')">وصول</button>
+          <button class="btn-sm btn-details" type="button" ${editAllowed ? '' : 'disabled'} ${editAllowed ? '' : 'style="opacity:.45;cursor:not-allowed"'} title="${editBlockedReason}" onclick="startEditMyBooking('${g.groupId}')">تعديل</button>
           <button class="btn-sm btn-cancel" type="button" ${cancelAllowed ? '' : 'disabled'} ${cancelAllowed ? '' : 'style="opacity:.45;cursor:not-allowed"'} title="${cancelAllowed ? '' : cancelReason}" onclick="cancelMyBooking('${g.groupId}')">إلغاء</button>
         </div>
       </td>
@@ -2228,6 +2234,257 @@ function minutesUntilSlotStart(dateStr, timeStr) {
   } catch(e) {
     return null;
   }
+}
+
+
+function getMyBookingTargets(groupId) {
+  const gid = String(groupId || '').trim();
+  let targets = [];
+  if (!gid) return targets;
+  for (let whId in warehouseData) {
+    (warehouseData[whId]?.bookings || []).forEach(b => {
+      if (deriveGroupKey(b) === gid) targets.push({ whId, b });
+    });
+  }
+  return targets;
+}
+
+function canCurrentSupplierManageTargets(targets) {
+  const canManageAnySupplier = isSupplierAdminUser(currentSupplierData) || canBookAnySupplierByCode(currentSupplierData);
+  if (canManageAnySupplier) return true;
+  const supplierName = String(currentSupplierData?.company || '').trim();
+  return !!supplierName && !targets.some(x => String(x.b.supplier || '').trim() !== supplierName);
+}
+
+function canCurrentSupplierEditTargets(targets) {
+  const username = String(currentSupplierData?.username || '').trim().toLowerCase();
+  if (!username || !targets.length) return false;
+  // Editing is allowed only for the user who originally created the booking.
+  return targets.every(x => String(x.b.createdBy || '').trim().toLowerCase() === username);
+}
+
+function getSlotAvailableCapacityExcludingGroup(whId, date, time, groupId) {
+  const cap = slotCapacity(whId, date, time);
+  const gid = String(groupId || '').trim();
+  const used = (warehouseData[whId]?.bookings || [])
+    .filter(b => b.date === date && b.time === time && b.status !== 'rejected' && b.status !== 'cancelled' && deriveGroupKey(b) !== gid)
+    .reduce((sum, b) => sum + (bookingCapacityUnits(b) || 0), 0);
+  return cap - used;
+}
+
+function nextQueueNoExcludingGroup(whId, date, slotTime, groupId) {
+  let list = (warehouseData[whId]?.bookings || []).filter(b => b.date === date && b.time === slotTime && deriveGroupKey(b) !== String(groupId || '').trim());
+  let maxQ = 0;
+  list.forEach(b => {
+    let m = String(b.queueNo || '').trim().match(/^(\d+)/);
+    let q = m ? parseInt(m[1], 10) : NaN;
+    if (Number.isFinite(q) && q > maxQ) maxQ = q;
+  });
+  let n = maxQ + 1;
+  let letter = slotLetter(slotTime);
+  return letter ? `${n} ${letter}` : String(n);
+}
+
+function resetBookingEditMode() {
+  editBookingGroupId = null;
+  ['supDate','bookingWarehouseSelect','supTruckCount','supCartons'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.disabled = false; el.style.opacity = 1; el.style.cursor = ''; }
+  });
+  const btn = document.getElementById('bookBtn');
+  if (btn) { btn.disabled = selectedSlot ? false : true; btn.textContent = selectedSlot ? `✓ احجز الساعة ${selectedSlot}` : 'اختر الوقت أولاً ↓'; }
+}
+
+function startEditMyBooking(groupId) {
+  const targets = getMyBookingTargets(groupId);
+  if (!targets.length) return;
+  if (!canCurrentSupplierEditTargets(targets)) { alert('لا يمكن تعديل الحجز إلا من خلال اليوزر الذي أنشأه'); return; }
+  if (targets.some(x => String(x.b.date || '').trim() === today())) { alert('لا يمكن تعديل حجز نفس اليوم'); return; }
+  if (targets.some(x => x.b.checkInTime)) { alert('لا يمكن تعديل الحجز بعد تسجيل الدخول بالمخزن'); return; }
+  if (targets.some(x => !['approved','pending'].includes(x.b.status))) { alert('لا يمكن تعديل الحجز بعد تغيير حالته'); return; }
+
+  const first = targets[0].b;
+  editBookingGroupId = String(groupId || '').trim();
+  document.getElementById('bookingWarehouseSelect').value = targets[0].whId;
+  document.getElementById('supName').value = first.supplier || '';
+  document.getElementById('supOrder').value = first.orderNum || '';
+  document.getElementById('supType').value = first.goodsType || '';
+  document.getElementById('supPlate').value = first.plate || '';
+  document.getElementById('supDriver').value = first.driver || '';
+  document.getElementById('supTruckType').value = first.truckType || '';
+  document.getElementById('supTruckCount').value = targets.reduce((sum,x)=>sum+(parseFloat(x.b.truckCount)||0),0) || 1;
+  document.getElementById('supCartons').value = targets.reduce((sum,x)=>sum+(parseInt(x.b.cartons)||0),0) || 1;
+  document.getElementById('supDate').value = first.date || '';
+  document.getElementById('supNotes').value = first.notes || '';
+
+  // Editing can include date, warehouse, truck count and cartons.
+  ['supDate','bookingWarehouseSelect','supTruckCount','supCartons'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.disabled = false; el.style.opacity = 1; el.style.cursor = ''; }
+  });
+  renderSupplierSlots();
+  selectedSlot = first.time || null;
+  if (selectedSlot) {
+    const slotEl = document.querySelector(`.slot-pick[data-time="${selectedSlot}"]`);
+    if (slotEl && !slotEl.classList.contains('taken')) slotEl.classList.add('selected');
+  }
+  const btn = document.getElementById('bookBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'حفظ التعديل'; }
+  showAlert('bookAlert', 'يمكنك تعديل بيانات الحجز بما فيها التاريخ والمخزن وعدد العربيات والكراتين ثم الضغط على حفظ التعديل.', 'success');
+}
+
+function saveEditedMyBooking() {
+  const targets = getMyBookingTargets(editBookingGroupId);
+  if (!targets.length) { resetBookingEditMode(); return; }
+  if (!canCurrentSupplierEditTargets(targets)) { showAlert('bookAlert', 'لا يمكن تعديل الحجز إلا من خلال اليوزر الذي أنشأه', 'error'); return; }
+  if (targets.some(x => String(x.b.date || '').trim() === today())) { showAlert('bookAlert', 'لا يمكن تعديل حجز نفس اليوم', 'error'); return; }
+  if (targets.some(x => x.b.checkInTime)) { showAlert('bookAlert', 'لا يمكن تعديل الحجز بعد تسجيل الدخول بالمخزن', 'error'); return; }
+  if (targets.some(x => !['approved','pending'].includes(x.b.status))) { showAlert('bookAlert', 'لا يمكن تعديل الحجز بعد تغيير حالته', 'error'); return; }
+
+  let supplier = document.getElementById('supName').value.trim();
+  if (canBookAnySupplierByCode(currentSupplierData) && !isSupplierAdminUser(currentSupplierData)) {
+    const typedCode = String(document.getElementById('supCode')?.value || '').trim();
+    if (typedCode) {
+      const matchByCode = findSupplierByCode(typedCode);
+      if (matchByCode && String(matchByCode.company || '').trim()) supplier = String(matchByCode.company || '').trim();
+    }
+  }
+  if (!supplier) { showAlert('bookAlert', 'يرجى تحديد اسم المورد', 'error'); return; }
+
+  const newWhId = document.getElementById('bookingWarehouseSelect').value;
+  const newDate = document.getElementById('supDate').value;
+  const newTruckType = document.getElementById('supTruckType').value;
+  const newTruckCount = parseFloat(document.getElementById('supTruckCount').value);
+  const newCartons = parseInt(document.getElementById('supCartons').value);
+  const groupId = String(editBookingGroupId || '').trim();
+  const first = targets[0].b;
+  const startTime = selectedSlot || first.time || SLOTS_PER_DAY[0];
+
+  if (!newWhId || !warehouseData[newWhId]) { showAlert('bookAlert', 'يرجى اختيار المخزن', 'error'); return; }
+  if (!newDate) { showAlert('bookAlert', 'يرجى اختيار التاريخ', 'error'); return; }
+  if (!isSupplierAdminUser(currentSupplierData) && newDate === today()) { showAlert('bookAlert', 'لا يمكن تعديل الحجز لنفس اليوم', 'error'); return; }
+  if (!isSupplierAdminUser(currentSupplierData)) {
+    for (let wid in warehouseData) {
+      const existsOther = (warehouseData[wid]?.bookings || []).some(b =>
+        deriveGroupKey(b) !== groupId &&
+        String(b.supplier || '').trim() === supplier &&
+        String(b.date || '').trim() === newDate &&
+        b.status !== 'cancelled' && b.status !== 'rejected'
+      );
+      if (existsOther) { showAlert('bookAlert', 'غير مسموح بأكثر من حجز في نفس اليوم.', 'error'); return; }
+    }
+  }
+  if (!newTruckType) { showAlert('bookAlert', 'يرجى اختيار نوع العربية', 'error'); return; }
+  if (newTruckCount < 0.5 || newTruckCount > 20) { showAlert('bookAlert', 'عدد العربيات يجب أن يكون بين 0.5 و 20', 'error'); return; }
+  if (newCartons <= 0) { showAlert('bookAlert', 'عدد الكراتين يجب أن يكون أكبر من صفر', 'error'); return; }
+  if (!document.getElementById('supType').value) { showAlert('bookAlert', 'يرجى اختيار نوع البضاعة', 'error'); return; }
+  if (isPastSlot(newDate, startTime)) { showAlert('bookAlert', 'هذا الموعد انتهى وقته', 'error'); return; }
+
+  const unitWeight = truckUnitWeight(newTruckType);
+  if (!unitWeight || unitWeight <= 0) { showAlert('bookAlert', 'نوع العربية غير صحيح', 'error'); return; }
+
+  let remainingUnits = newTruckCount * unitWeight;
+  let remainingCartons = newCartons;
+  const totalUnitsRequested = remainingUnits;
+  const startIdx = SLOTS_PER_DAY.indexOf(startTime);
+  if (startIdx < 0) { showAlert('bookAlert', 'الوقت المختار غير صحيح', 'error'); return; }
+
+  const chunks = [];
+  for (let i = startIdx; i < SLOTS_PER_DAY.length && remainingUnits > 0; i++) {
+    const slotTime = SLOTS_PER_DAY[i];
+    if (isPastSlot(newDate, slotTime)) continue;
+    if (isBlocked(newWhId, newDate, slotTime)) continue;
+    const availableUnits = getSlotAvailableCapacityExcludingGroup(newWhId, newDate, slotTime, groupId);
+    if (availableUnits <= 0) continue;
+    const allocateUnits = Math.min(remainingUnits, availableUnits);
+    if (allocateUnits <= 0) continue;
+    let allocateCartons = 0;
+    if (remainingCartons > 0) {
+      if (allocateUnits >= remainingUnits - 1e-9) {
+        allocateCartons = remainingCartons;
+      } else {
+        let ratio = allocateUnits / totalUnitsRequested;
+        allocateCartons = Math.max(0, Math.min(remainingCartons, Math.round(newCartons * ratio)));
+        if (allocateCartons === 0 && remainingCartons > 0) allocateCartons = 1;
+      }
+    }
+    chunks.push({ slotTime, allocateUnits, allocateTrucks: allocateUnits / unitWeight, allocateCartons });
+    remainingUnits -= allocateUnits;
+    remainingCartons -= allocateCartons;
+  }
+  if (remainingUnits > 0) {
+    showAlert('bookAlert', `❌ السعة غير كافية لإكمال التعديل. المتبقي بدون حجز: ${fmtCap(remainingUnits)} عربية.`, 'error');
+    return;
+  }
+
+  const updates = {
+    supplier,
+    orderNum: document.getElementById('supOrder').value.trim(),
+    goodsType: document.getElementById('supType').value,
+    plate: document.getElementById('supPlate').value.trim(),
+    driver: document.getElementById('supDriver').value.trim(),
+    truckType: newTruckType,
+    notes: document.getElementById('supNotes').value.trim(),
+    date: newDate,
+    statusUpdatedAt: new Date().toISOString(),
+  };
+
+  const existing = targets.map(x => x.b);
+  const oldWhIds = [...new Set(targets.map(x => x.whId))];
+  const changedBookings = [];
+
+  chunks.forEach((chunk, idx) => {
+    let b = existing[idx];
+    if (!b) {
+      b = { ...existing[0], id: `${groupId}-${idx + 1}`, groupId, createdAt: existing[0].createdAt || new Date().toISOString(), createdBy: existing[0].createdBy || currentSupplierData?.username || '' };
+    }
+    Object.assign(b, updates, {
+      warehouse: newWhId,
+      time: chunk.slotTime,
+      queueNo: nextQueueNoExcludingGroup(newWhId, newDate, chunk.slotTime, groupId),
+      truckCount: chunk.allocateTrucks,
+      unitsConsumed: chunk.allocateUnits,
+      cartons: chunk.allocateCartons,
+      status: b.status || 'approved',
+    });
+    changedBookings.push(b);
+  });
+
+  // Extra old split rows are cancelled so they no longer count in capacity.
+  existing.slice(chunks.length).forEach(b => {
+    b.status = 'cancelled';
+    b.cancelledAt = new Date().toISOString();
+    b.statusUpdatedAt = new Date().toISOString();
+    changedBookings.push(b);
+  });
+
+  // Remove the edited group's active rows from all old warehouses, then insert updated rows in the selected warehouse.
+  oldWhIds.forEach(whId => {
+    warehouseData[whId].bookings = (warehouseData[whId].bookings || []).filter(b => deriveGroupKey(b) !== groupId);
+  });
+  warehouseData[newWhId].bookings = warehouseData[newWhId].bookings || [];
+  changedBookings.forEach(b => {
+    const targetWh = (b.status === 'cancelled' && !chunks.includes(b)) ? (targets.find(x => x.b.id === b.id)?.whId || newWhId) : newWhId;
+    warehouseData[targetWh] = warehouseData[targetWh] || { bookings: [], blockedSlots: [], slotCapacityOverrides: {} };
+    warehouseData[targetWh].bookings.push(b);
+    upsertBookingToApi(targetWh, b);
+  });
+
+  [...new Set([...oldWhIds, newWhId])].forEach(saveWarehouseData);
+
+  resetBookingEditMode();
+  document.getElementById('supOrder').value = '';
+  document.getElementById('supPlate').value = '';
+  document.getElementById('supDriver').value = '';
+  document.getElementById('supNotes').value = '';
+  document.getElementById('supType').value = '';
+  document.getElementById('supTruckType').value = '';
+  document.getElementById('supTruckCount').value = '1';
+  document.getElementById('supCartons').value = '1';
+  selectedSlot = null;
+  renderSupplierSlots();
+  renderMyBookings();
+  showAlert('bookAlert', '✅ تم تعديل الحجز', 'success');
 }
 
 function cancelMyBooking(groupId) {
@@ -2417,6 +2674,7 @@ function supplierHasBookingOnDate(supplierName, dateStr) {
 
 async function submitBooking() {
   if (!currentSupplierData) { showAlert('bookAlert', 'خطأ في تسجيل الدخول', 'error'); return; }
+  if (editBookingGroupId) { saveEditedMyBooking(); return; }
   
   let supplier = document.getElementById('supName').value.trim();
   // supplier_admin can book for any supplier name that exists in Google Sheet (Suppliers tab)
@@ -3542,6 +3800,7 @@ function doLogout() {
   currentSupplierData = null;
   currentWarehouseUserData = null;
   selectedSlot = null;
+  resetBookingEditMode();
   currentWarehouseAccess = 'all';
   stopAutoSync();
   stopIdleTracking();
@@ -4068,6 +4327,7 @@ window.closeModal = closeModal;
 window.pickSlot = pickSlot;
 window.completeBooking = completeBooking;
 window.cancelBooking = cancelBooking;
+window.startEditMyBooking = startEditMyBooking;
 window.switchPage = switchPage;
 window.renderBookingsTable = renderBookingsTable;
 window.saveWarehouseUserNote = saveWarehouseUserNote;
