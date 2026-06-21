@@ -691,7 +691,7 @@ function closeSignupModal(){
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>دخول</th><th>خروج</th><th>المورد</th><th>نوع البضاعة</th><th>نوع العربية</th><th>الحالة</th></tr></thead>
+          <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>وقت الوصول</th><th>دخول</th><th>خروج</th><th>المورد</th><th>نوع البضاعة</th><th>نوع العربية</th><th>ملاحظات الامن</th><th>ملاحظات الاستلامات</th><th>الحالة</th></tr></thead>
           <tbody id="rBookingsPreview"></tbody>
         </table>
       </div>
@@ -1004,14 +1004,21 @@ function escapeHtml(v) {
 }
 
 function warehouseNoteColumnKey(access) {
+  const a = String(access || '').trim();
+  if (a === 'single') return 'ملاحظات الامن';
+  if (a === 'single_view') return 'ملاحظات الاستلامات';
+  return `notes_${a}`;
+}
+
+function legacyWarehouseNoteColumnKey(access) {
   return `notes_${String(access || '').trim()}`;
 }
 
 function getWarehouseNoteColumns() {
   // Notes are grouped by warehouse-user access type, not by username.
   return [
-    { access: 'single', label: 'ملاحظات مخزن واحد' },
-    { access: 'single_view', label: 'ملاحظات عرض مخزن واحد فقط' },
+    { access: 'single', label: 'ملاحظات الامن' },
+    { access: 'single_view', label: 'ملاحظات الاستلامات' },
   ];
 }
 
@@ -1028,7 +1035,8 @@ function renderBookingNoteCell(b, noteColumn) {
   const key = warehouseNoteColumnKey(access);
   const currentAccess = String(currentWarehouseUserData?.access || currentWarehouseAccess || '').trim();
   const canEdit = currentRole === 'warehouse' && access && currentAccess === access;
-  const val = escapeHtml(b[key] || '');
+  const legacyKey = legacyWarehouseNoteColumnKey(access);
+  const val = escapeHtml(b[key] || b[legacyKey] || '');
   if (!canEdit) {
     return `<td>${val ? `<div style="white-space:pre-wrap;min-width:160px">${val}</div>` : '-'}</td>`;
   }
@@ -1236,7 +1244,7 @@ async function loadWarehouseDataFromApi() {
         cancelledAt: b.cancelledAt || '',
       };
       Object.keys(b || {}).forEach(k => {
-        if (String(k).startsWith('notes_')) bookingObj[k] = b[k] || '';
+        if (String(k).startsWith('notes_') || k === 'ملاحظات الامن' || k === 'ملاحظات الاستلامات') bookingObj[k] = b[k] || '';
       });
       warehouseData[whId].bookings.push(bookingObj);
     });
@@ -1434,7 +1442,7 @@ function bookingApiPayload(whId, booking) {
     notes: booking.notes || '',
   };
   Object.keys(booking || {}).forEach(k => {
-    if (String(k).startsWith('notes_')) payload[k] = booking[k] || '';
+    if (String(k).startsWith('notes_') || k === 'ملاحظات الامن' || k === 'ملاحظات الاستلامات') payload[k] = booking[k] || '';
   });
   return payload;
 }
@@ -1623,8 +1631,8 @@ function exportAllSheets() {
   let whFilter = document.getElementById('reportsWarehouseFilter')?.value || '';
   // Bookings
   let bookingsList = getAllBookings(whFilter);
-  let bookingsRows = [["رقم الحجز","المخزن","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","التاريخ","الوقت","الحالة"]];
-  bookingsList.forEach(b=>bookingsRows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', b.truckCount||'', b.cartons||'', formatDate(b.date), b.time, statusLabel(b.status)]));
+  let bookingsRows = [["رقم الحجز","المخزن","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","التاريخ","الوقت","وقت الوصول","ملاحظات الامن","ملاحظات الاستلامات","الحالة"]];
+  bookingsList.forEach(b=>bookingsRows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', b.truckCount||'', b.cartons||'', formatDate(b.date), b.time, b.arrivalTime ? new Date(b.arrivalTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '', b['ملاحظات الامن'] || b.notes_single || '', b['ملاحظات الاستلامات'] || b.notes_single_view || '', statusLabel(b.status)]));
 
   // Supplier summary
   let supSummary = buildSupplierSummary(bookingsList);
@@ -3671,11 +3679,14 @@ function renderBookingsCard() {
 
   let html = '';
   list.slice(0, 30).forEach(b => {
+    const arrivalT = b.arrivalTime ? new Date(b.arrivalTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
     const inT = b.checkInTime ? new Date(b.checkInTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
     const outT = b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
-    html += `<tr><td>${b.id}</td><td>${b.queueNo||''}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${b.goodsType||''}</td><td>${b.truckType||''}</td><td>${statusLabel(b.status)}</td></tr>`;
+    const securityNotes = b['ملاحظات الامن'] || b.notes_single || '';
+    const receivingNotes = b['ملاحظات الاستلامات'] || b.notes_single_view || '';
+    html += `<tr><td>${b.id}</td><td>${b.queueNo||''}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${arrivalT}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${b.goodsType||''}</td><td>${b.truckType||''}</td><td>${escapeHtml(securityNotes)}</td><td>${escapeHtml(receivingNotes)}</td><td>${statusLabel(b.status)}</td></tr>`;
   });
-  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="11" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="14" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
 
 function renderUtilizationCard() {
@@ -3898,12 +3909,13 @@ function exportBookingsReport() {
   let toStr = document.getElementById('rTo').value;
   let status = document.getElementById('rBookingsStatus').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, status);
-  let rows = [["رقم الحجز","المخزن","التاريخ","الوقت","وقت الدخول","وقت الخروج","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","الحالة"]];
+  let rows = [["رقم الحجز","المخزن","التاريخ","الوقت","وقت الوصول","وقت الدخول","وقت الخروج","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","ملاحظات الامن","ملاحظات الاستلامات","الحالة"]];
   list.forEach(b=>rows.push([
     b.id,
     b.warehouseName,
     formatDate(b.date),
     b.time,
+    b.arrivalTime ? new Date(b.arrivalTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '',
     b.checkInTime ? new Date(b.checkInTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '',
     b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '',
     b.supplier,
@@ -3912,6 +3924,8 @@ function exportBookingsReport() {
     b.truckType||'',
     b.truckCount||'',
     b.cartons||'',
+    b['ملاحظات الامن'] || b.notes_single || '',
+    b['ملاحظات الاستلامات'] || b.notes_single_view || '',
     statusLabel(b.status)
   ]));
   downloadExcel([{name:'كل الحجوزات', data: rows}], 'كل_الحجوزات.xlsx');
