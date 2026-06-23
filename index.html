@@ -711,7 +711,7 @@ function closeSignupModal(){
       </div>
       <div style="overflow-x:auto;max-height:260px">
         <table class="preview-table">
-          <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>وقت الوصول</th><th>دخول</th><th>خروج</th><th>المورد</th><th>نوع البضاعة</th><th>نوع العربية</th><th>ملاحظات الامن</th><th>ملاحظات الاستلامات</th><th>الحالة</th></tr></thead>
+          <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>المخزن</th><th>التاريخ</th><th>الوقت</th><th>وقت الوصول</th><th>دخول</th><th>خروج</th><th>المورد</th><th>نوع البضاعة</th><th>نوع العربية</th><th>عدد العربيات</th><th>ملاحظات الامن</th><th>ملاحظات الاستلامات</th><th>الحالة</th></tr></thead>
           <tbody id="rBookingsPreview"></tbody>
         </table>
       </div>
@@ -1726,7 +1726,7 @@ function buildSupplierSummary(bookings) {
     map[key].totalBookings += 1;
     if (b.status === 'approved') map[key].approved += 1;
     if (b.status === 'completed') map[key].completed += 1;
-    map[key].totalTrucks += (parseInt(b.truckCount) || 1);
+    map[key].totalTrucks += bookingTruckCountForReports(b);
   });
   return Object.values(map).sort((a,b)=>b.totalBookings-a.totalBookings);
 }
@@ -1769,6 +1769,63 @@ function countUniqueTrucks(bookings, getBucketKey) {
   return seen.size;
 }
 
+function truckTypeEntriesFromBooking(b) {
+  const text = String(b?.truckType || '').trim();
+  const entries = [];
+  if (text) {
+    text.split(/،|,/).forEach(part => {
+      const p = part.trim();
+      if (!p) return;
+      const m = p.match(/^(.*?)\s*[×xX]\s*(\d+(?:\.\d+)?)$/);
+      if (m) {
+        const type = m[1].trim() || '—';
+        const count = parseFloat(m[2]) || 0;
+        if (count > 0) entries.push({ type, count });
+      }
+    });
+  }
+  if (entries.length) return entries;
+  return [{ type: text || '—', count: parseFloat(b?.truckCount) || 0 }];
+}
+
+function bookingTruckCountForReports(b) {
+  const entries = truckTypeEntriesFromBooking(b);
+  const fromSummary = entries.reduce((s,x)=>s+(parseFloat(x.count)||0),0);
+  if (fromSummary > 0) return fromSummary;
+  return parseFloat(b?.truckCount) || 0;
+}
+
+function groupBookingsForReports(bookings) {
+  const map = {};
+  (bookings || []).forEach(b => {
+    const g = deriveGroupKey(b) || String(b.id || '').trim();
+    if (!g) return;
+    if (!map[g]) map[g] = { groupId: g, parts: [], first: b };
+    map[g].parts.push(b);
+    if ((b.createdAt || '') && (!(map[g].first?.createdAt) || (b.createdAt || '') < (map[g].first.createdAt || ''))) map[g].first = b;
+  });
+  return Object.values(map).map(g => {
+    const first = g.first || g.parts[0] || {};
+    const summaryEntries = truckTypeEntriesFromBooking(first).filter(x => String(first.truckType || '').includes('×') || String(first.truckType || '').includes('x'));
+    const truckEntries = summaryEntries.length ? summaryEntries : (() => {
+      const byType = {};
+      g.parts.forEach(p => {
+        const type = String(p.truckType || '').trim() || '—';
+        byType[type] = (byType[type] || 0) + (parseFloat(p.truckCount) || 0);
+      });
+      return Object.keys(byType).map(type => ({ type, count: byType[type] }));
+    })();
+    const truckCount = truckEntries.reduce((s,x)=>s+(parseFloat(x.count)||0),0);
+    const cartons = g.parts.reduce((s,p)=>s+(parseFloat(p.cartons)||0),0) || (parseFloat(first.cartons)||0);
+    return { ...first, id: g.groupId, groupId: g.groupId, truckEntries, truckCount, cartons, parts: g.parts };
+  });
+}
+
+function fmtReportTruckCount(n) {
+  const x = Math.round((parseFloat(n)||0) * 100) / 100;
+  return (x % 1 === 0) ? String(x) : String(x);
+}
+
 function genId() { return 'HYG-' + Math.random().toString(36).substr(2,4).toUpperCase(); }
 
 // Booking ID: first 3 chars from warehouse code, rest numbers
@@ -1806,14 +1863,14 @@ function downloadExcel(sheets, filename) {
 function exportAllReports() {
   let whFilter = document.getElementById('reportsWarehouseFilter')?.value || '';
   // Bookings
-  let bookingsList = getAllBookings(whFilter);
+  let bookingsList = groupBookingsForReports(getAllBookings(whFilter));
   let bookingsRows = [["رقم الحجز","المخزن","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","التاريخ","الوقت","وقت الوصول","ملاحظات الامن","ملاحظات الاستلامات","الحالة"]];
-  bookingsList.forEach(b=>bookingsRows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', b.truckCount||'', b.cartons||'', formatDate(b.date), b.time, b.arrivalTime ? new Date(b.arrivalTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '', b['ملاحظات الامن'] || b.notes_single || '', b['ملاحظات الاستلامات'] || b.notes_single_view || '', statusLabel(b.status)]));
+  bookingsList.forEach(b=>bookingsRows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', fmtReportTruckCount(b.truckCount), b.cartons||'', formatDate(b.date), b.time, b.arrivalTime ? new Date(b.arrivalTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '', b['ملاحظات الامن'] || b.notes_single || '', b['ملاحظات الاستلامات'] || b.notes_single_view || '', statusLabel(b.status)]));
 
   // Supplier summary
   let supSummary = buildSupplierSummary(bookingsList);
   let supRows = [["المورد","عدد الحجوزات","مؤكد","مكتمل","إجمالي العربيات"]];
-  supSummary.forEach(s=>supRows.push([s.supplier, s.totalBookings, s.approved, s.completed, s.totalTrucks]));
+  supSummary.forEach(s=>supRows.push([s.supplier, s.totalBookings, s.approved, s.completed, fmtReportTruckCount(s.totalTrucks)]));
 
   // Blocked slots
   let blockedList = getAllBlockedSlots(whFilter);
@@ -3917,8 +3974,7 @@ function renderBookingsCard() {
   let toStr = document.getElementById('rTo').value;
   let status = document.getElementById('rBookingsStatus').value;
 
-  let list = getAllBookings(whFilter);
-  list = filterBookingsByRange(list, fromStr, toStr, status);
+  let list = groupBookingsForReports(filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, status));
 
   let kTotal = list.length;
   let kPending = list.filter(b=>b.status==='pending').length;
@@ -3942,9 +3998,9 @@ function renderBookingsCard() {
     const outT = b.checkOutTime ? new Date(b.checkOutTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '';
     const securityNotes = b['ملاحظات الامن'] || b.notes_single || '';
     const receivingNotes = b['ملاحظات الاستلامات'] || b.notes_single_view || '';
-    html += `<tr><td>${b.id}</td><td>${b.queueNo||''}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${arrivalT}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${b.goodsType||''}</td><td>${b.truckType||''}</td><td>${escapeHtml(securityNotes)}</td><td>${escapeHtml(receivingNotes)}</td><td>${statusLabel(b.status)}</td></tr>`;
+    html += `<tr><td>${b.id}</td><td>${b.queueNo||''}</td><td>${b.warehouseName||''}</td><td>${formatDate(b.date)}</td><td>${b.time||''}</td><td>${arrivalT}</td><td>${inT}</td><td>${outT}</td><td>${b.supplier||''}</td><td>${b.goodsType||''}</td><td>${b.truckType||''}</td><td>${fmtReportTruckCount(b.truckCount)}</td><td>${escapeHtml(securityNotes)}</td><td>${escapeHtml(receivingNotes)}</td><td>${statusLabel(b.status)}</td></tr>`;
   });
-  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="14" style="color:#999">لا يوجد بيانات</td></tr>`;
+  document.getElementById('rBookingsPreview').innerHTML = html || `<tr><td colspan="15" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
 
 function renderUtilizationCard() {
@@ -3995,13 +4051,13 @@ function renderSupplierSummaryCard() {
   let whFilter = getReportsWarehouseFilter();
   let fromStr = document.getElementById('rFrom').value;
   let toStr = document.getElementById('rTo').value;
-  let list = getAllBookings(whFilter);
-  list = filterBookingsByRange(list, fromStr, toStr, '');
+  let list = groupBookingsForReports(filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, ''));
   let map = {};
   list.forEach(b=>{
     let key = (b.supplier||'').trim() || '—';
-    if (!map[key]) map[key] = { supplier: key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+    if (!map[key]) map[key] = { supplier: key, total: 0, truckTotal: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
     map[key].total += 1;
+    map[key].truckTotal += parseFloat(b.truckCount) || 0;
     if (b.status === 'pending') map[key].pending += 1;
     if (b.status === 'approved') map[key].approved += 1;
     if (b.status === 'completed') map[key].completed += 1;
@@ -4012,8 +4068,7 @@ function renderSupplierSummaryCard() {
   let rows = Object.values(map).sort((a,b)=>b.total-a.total);
   let html = '';
   rows.slice(0, 30).forEach(s => {
-    const truckTotal = countUniqueTrucks(list.filter(b => ((b.supplier||'').trim()||'—') === s.supplier), b => (b.supplier||'').trim()||'—');
-    html += `<tr><td>${s.supplier}</td><td>${truckTotal}</td><td>${s.total}</td><td>${s.pending}</td><td>${s.approved}</td><td>${s.completed}</td><td>${s.not_delivered}</td><td>${s.cancelled}</td><td>${s.rejected}</td></tr>`;
+    html += `<tr><td>${s.supplier}</td><td>${fmtReportTruckCount(s.truckTotal)}</td><td>${s.total}</td><td>${s.pending}</td><td>${s.approved}</td><td>${s.completed}</td><td>${s.not_delivered}</td><td>${s.cancelled}</td><td>${s.rejected}</td></tr>`;
   });
   document.getElementById('rSupPreview').innerHTML = html || `<tr><td colspan="9" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
@@ -4022,12 +4077,13 @@ function renderGoodsTypeCard() {
   let whFilter = getReportsWarehouseFilter();
   let fromStr = document.getElementById('rFrom').value;
   let toStr = document.getElementById('rTo').value;
-  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
+  let list = groupBookingsForReports(filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, ''));
   let map = {};
   list.forEach(b => {
     splitGoodsTypes(b.goodsType).forEach(key => {
-      if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+      if (!map[key]) map[key] = { key, total: 0, truckTotal: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
       map[key].total += 1;
+      map[key].truckTotal += parseFloat(b.truckCount) || 0;
       if (b.status === 'pending') map[key].pending += 1;
       if (b.status === 'approved') map[key].approved += 1;
       if (b.status === 'completed') map[key].completed += 1;
@@ -4039,7 +4095,7 @@ function renderGoodsTypeCard() {
   let rows = Object.values(map).sort((a,b)=>b.total-a.total);
   let html = '';
   rows.slice(0, 30).forEach(x => {
-    const truckTotal = countUniqueTrucks(list.filter(b => splitGoodsTypes(b.goodsType).includes(x.key)), b => splitGoodsTypes(b.goodsType).join('|'));
+    const truckTotal = fmtReportTruckCount(x.truckTotal);
     html += `<tr><td>${x.key}</td><td>${truckTotal}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
   });
   document.getElementById('rGoodsPreview').innerHTML = html || `<tr><td colspan="9" style="color:#999">لا يوجد بيانات</td></tr>`;
@@ -4049,12 +4105,13 @@ function exportGoodsTypeReport() {
   let whFilter = getReportsWarehouseFilter();
   let fromStr = document.getElementById('rFrom').value;
   let toStr = document.getElementById('rTo').value;
-  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
+  let list = groupBookingsForReports(filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, ''));
   let map = {};
   list.forEach(b => {
     splitGoodsTypes(b.goodsType).forEach(key => {
-      if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+      if (!map[key]) map[key] = { key, total: 0, truckTotal: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
       map[key].total += 1;
+      map[key].truckTotal += parseFloat(b.truckCount) || 0;
       if (b.status === 'pending') map[key].pending += 1;
       if (b.status === 'approved') map[key].approved += 1;
       if (b.status === 'completed') map[key].completed += 1;
@@ -4065,7 +4122,7 @@ function exportGoodsTypeReport() {
   });
   let out = [["نوع البضاعة","عدد العربيات","إجمالي الحجوزات","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
   Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>{
-    const truckTotal = countUniqueTrucks(list.filter(b => splitGoodsTypes(b.goodsType).includes(x.key)), b => splitGoodsTypes(b.goodsType).join('|'));
+    const truckTotal = fmtReportTruckCount(x.truckTotal);
     out.push([x.key, truckTotal, x.total, x.pending, x.approved, x.completed, x.not_delivered, x.cancelled, x.rejected]);
   });
   downloadExcel([{name:'تقرير نوع البضاعة', data: out}], 'تقرير_نوع_البضاعة.xlsx');
@@ -4075,24 +4132,26 @@ function renderTruckTypeCard() {
   let whFilter = getReportsWarehouseFilter();
   let fromStr = document.getElementById('rFrom').value;
   let toStr = document.getElementById('rTo').value;
-  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
+  let list = groupBookingsForReports(filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, ''));
   let map = {};
   list.forEach(b => {
-    let key = (b.truckType || '').trim() || '—';
-    if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
-    map[key].total += 1;
-    if (b.status === 'pending') map[key].pending += 1;
-    if (b.status === 'approved') map[key].approved += 1;
-    if (b.status === 'completed') map[key].completed += 1;
-    if (b.status === 'not_delivered') map[key].not_delivered += 1;
-    if (b.status === 'cancelled') map[key].cancelled += 1;
-    if (b.status === 'rejected') map[key].rejected += 1;
+    (b.truckEntries || truckTypeEntriesFromBooking(b)).forEach(entry => {
+      let key = (entry.type || '').trim() || '—';
+      if (!map[key]) map[key] = { key, total: 0, truckTotal: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+      map[key].total += 1;
+      map[key].truckTotal += parseFloat(entry.count) || 0;
+      if (b.status === 'pending') map[key].pending += 1;
+      if (b.status === 'approved') map[key].approved += 1;
+      if (b.status === 'completed') map[key].completed += 1;
+      if (b.status === 'not_delivered') map[key].not_delivered += 1;
+      if (b.status === 'cancelled') map[key].cancelled += 1;
+      if (b.status === 'rejected') map[key].rejected += 1;
+    });
   });
-  let rows = Object.values(map).sort((a,b)=>b.total-a.total);
+  let rows = Object.values(map).sort((a,b)=>b.truckTotal-a.truckTotal);
   let html = '';
   rows.slice(0, 30).forEach(x => {
-    const truckTotal = countUniqueTrucks(list.filter(b => ((b.truckType||'').trim()||'—') === x.key), b => (b.truckType||'').trim()||'—');
-    html += `<tr><td>${x.key}</td><td>${truckTotal}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
+    html += `<tr><td>${x.key}</td><td>${fmtReportTruckCount(x.truckTotal)}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
   });
   document.getElementById('rTruckPreview').innerHTML = html || `<tr><td colspan="9" style="color:#999">لا يوجد بيانات</td></tr>`;
 }
@@ -4101,23 +4160,25 @@ function exportTruckTypeReport() {
   let whFilter = getReportsWarehouseFilter();
   let fromStr = document.getElementById('rFrom').value;
   let toStr = document.getElementById('rTo').value;
-  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
+  let list = groupBookingsForReports(filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, ''));
   let map = {};
   list.forEach(b => {
-    let key = (b.truckType || '').trim() || '—';
-    if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
-    map[key].total += 1;
-    if (b.status === 'pending') map[key].pending += 1;
-    if (b.status === 'approved') map[key].approved += 1;
-    if (b.status === 'completed') map[key].completed += 1;
-    if (b.status === 'not_delivered') map[key].not_delivered += 1;
-    if (b.status === 'cancelled') map[key].cancelled += 1;
-    if (b.status === 'rejected') map[key].rejected += 1;
+    (b.truckEntries || truckTypeEntriesFromBooking(b)).forEach(entry => {
+      let key = (entry.type || '').trim() || '—';
+      if (!map[key]) map[key] = { key, total: 0, truckTotal: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+      map[key].total += 1;
+      map[key].truckTotal += parseFloat(entry.count) || 0;
+      if (b.status === 'pending') map[key].pending += 1;
+      if (b.status === 'approved') map[key].approved += 1;
+      if (b.status === 'completed') map[key].completed += 1;
+      if (b.status === 'not_delivered') map[key].not_delivered += 1;
+      if (b.status === 'cancelled') map[key].cancelled += 1;
+      if (b.status === 'rejected') map[key].rejected += 1;
+    });
   });
   let out = [["نوع العربية","عدد العربيات","إجمالي الحجوزات","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
-  Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>{
-    const truckTotal = countUniqueTrucks(list.filter(b => ((b.truckType||'').trim()||'—') === x.key), b => (b.truckType||'').trim()||'—');
-    out.push([x.key, truckTotal, x.total, x.pending, x.approved, x.completed, x.not_delivered, x.cancelled, x.rejected]);
+  Object.values(map).sort((a,b)=>b.truckTotal-a.truckTotal).forEach(x=>{
+    out.push([x.key, fmtReportTruckCount(x.truckTotal), x.total, x.pending, x.approved, x.completed, x.not_delivered, x.cancelled, x.rejected]);
   });
   downloadExcel([{name:'تقرير نوع العربية', data: out}], 'تقرير_نوع_العربية.xlsx');
 }
@@ -4168,7 +4229,7 @@ function exportBookingsReport() {
   let fromStr = document.getElementById('rFrom').value;
   let toStr = document.getElementById('rTo').value;
   let status = document.getElementById('rBookingsStatus').value;
-  let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, status);
+  let list = groupBookingsForReports(filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, status));
   let rows = [["رقم الحجز","المخزن","التاريخ","الوقت","وقت الوصول","وقت الدخول","وقت الخروج","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","ملاحظات الامن","ملاحظات الاستلامات","الحالة"]];
   list.forEach(b=>rows.push([
     b.id,
@@ -4182,7 +4243,7 @@ function exportBookingsReport() {
     b.orderNum,
     b.goodsType,
     b.truckType||'',
-    b.truckCount||'',
+    fmtReportTruckCount(b.truckCount),
     b.cartons||'',
     b['ملاحظات الامن'] || b.notes_single || '',
     b['ملاحظات الاستلامات'] || b.notes_single_view || '',
