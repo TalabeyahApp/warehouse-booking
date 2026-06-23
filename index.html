@@ -1897,17 +1897,25 @@ function getSlotBookedCount(whId, date, time) {
     seenBookingIds.add(id);
     return true;
   });
-  return slotBookings.reduce((sum, b) => {
-    // If booking was split across slots by capacity-units, respect explicit unitsConsumed
-    if (b.unitsConsumed !== undefined && b.unitsConsumed !== null && b.unitsConsumed !== '') {
-      return sum + (parseFloat(b.unitsConsumed) || 0);
-    }
-    const summaryUnits = unitsFromTruckTypeSummary(b.truckType);
-    if (summaryUnits > 0) return sum + summaryUnits;
-    const count = parseFloat(b.truckCount) || 1;
-    const weight = truckUnitWeight(b.truckType);
-    return sum + (count * weight);
-  }, 0);
+  return slotBookings.reduce((sum, b) => sum + bookingCapacityUnitsSafe(b), 0);
+}
+
+function bookingCapacityUnitsSafe(b) {
+  // Multi-type bookings are saved as a summary in truckType, e.g.
+  // "دبابة نص حمولة × 1، جامبو بدون رامب بالتات × 1".
+  // Use that summary as the source of truth, because a stale/wrong unitsConsumed
+  // value from remote storage can incorrectly mark the slot as full.
+  const summaryUnits = unitsFromTruckTypeSummary(b?.truckType);
+  if (summaryUnits > 0) return summaryUnits;
+
+  const count = parseFloat(b?.truckCount) || 1;
+  const expectedUnits = count * truckUnitWeight(b?.truckType);
+  const rawUnits = (b?.unitsConsumed === undefined || b?.unitsConsumed === null || b?.unitsConsumed === '') ? NaN : parseFloat(b.unitsConsumed);
+
+  // For split bookings, unitsConsumed should be <= expectedUnits. If it is larger,
+  // ignore it and recompute from truckCount/truckType.
+  if (Number.isFinite(rawUnits) && rawUnits >= 0 && rawUnits <= expectedUnits + 1e-9) return rawUnits;
+  return expectedUnits;
 }
 
 function getSlotAvailableCapacity(whId, date, time) {
