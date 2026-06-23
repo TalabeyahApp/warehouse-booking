@@ -559,7 +559,7 @@ function closeSignupModal(){
           <option>تريلا بالتات</option>
           <option>تريلا بدون بالتات</option>
         </select></div>
-        <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="0.5" max="6" step="0.5" value="1" oninput="enforceTruckCountLimit(true);checkCapacity()"></div>
+        <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="1" max="6" step="1" value="1" oninput="enforceTruckCountLimit(true);checkCapacity()"></div>
         <div class="form-group"><label>عدد الكراتين <span style="color:red">*</span></label><input type="number" id="supCartons" min="1" max="5000" value="1" oninput="clampCartons()"></div>
       </div>
       <!-- تم حذف خيار التحميل على بالتات -->
@@ -911,14 +911,23 @@ function enforceTruckCountLimit(showMessage = false) {
   if (!countEl) return true;
   const truckType = typeEl ? typeEl.value : '';
   const max = maxTruckCountForType(truckType);
+  countEl.min = '1';
+  countEl.step = '1';
   countEl.max = String(max);
-  const v = parseFloat(countEl.value);
-  if (Number.isFinite(v) && v > max) {
-    countEl.value = String(max);
+  const raw = String(countEl.value || '').trim();
+  if (raw === '') return true;
+  const v = parseFloat(raw);
+  if (!Number.isFinite(v)) return true;
+  let fixed = Math.floor(v);
+  let changed = fixed !== v;
+  if (fixed < 1) { fixed = 1; changed = true; }
+  if (fixed > max) { fixed = max; changed = true; }
+  if (changed) {
+    countEl.value = String(fixed);
     if (showMessage) {
-      const msg = (truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات')
-        ? 'أقصى عدد للتريلا هو 2 عربية'
-        : 'أقصى عدد للعربيات هو 6';
+      const msg = v > max
+        ? ((truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات') ? 'أقصى عدد للتريلا هو 2 عربية' : 'أقصى عدد للعربيات هو 6')
+        : 'عدد العربيات لازم يكون رقم صحيح بدون كسور';
       showAlert('bookAlert', msg, 'error');
     }
     return false;
@@ -1820,13 +1829,13 @@ function checkCapacity() {
   if (!currentSupplierData) return;
   
   let date = document.getElementById('supDate').value;
-  let truckCount = parseFloat(document.getElementById('supTruckCount').value) || 1;
+  let truckCount = parseInt(document.getElementById('supTruckCount').value, 10) || 1;
   let selectedTimeElem = document.querySelector('.slot-pick.selected');
   let time = selectedTimeElem ? selectedTimeElem.getAttribute('data-time') : null;
   let whId = document.getElementById('bookingWarehouseSelect').value;
   let truckType = document.getElementById('supTruckType').value;
   enforceTruckCountLimit(false);
-  truckCount = parseFloat(document.getElementById('supTruckCount').value) || 1;
+  truckCount = parseInt(document.getElementById('supTruckCount').value, 10) || 1;
   let unitWeight = truckUnitWeight(truckType);
   let requestedUnits = truckCount * unitWeight;
   
@@ -2120,10 +2129,17 @@ function renderSupplierSlots() {
   }
 
   let grid = document.getElementById('supplierSlots');
+  const supplierAdminCanUsePastSlots = isSupplierAdminUser(currentSupplierData);
   grid.innerHTML = SLOTS_PER_DAY.map(time => {
     let st = slotStatus(whId, date, time);
     let bookedCount = getSlotBookedCount(whId, date, time);
     let available = slotCapacity(whId, date, time) - bookedCount;
+    if (supplierAdminCanUsePastSlots && st === 'past') {
+      if (isBlocked(whId, date, time)) st = 'blocked';
+      else if (available <= 0) st = 'full';
+      else if (available <= 1) st = 'warning';
+      else st = 'available';
+    }
     let taken = (st === 'blocked' || st === 'full' || st === 'past');
     let cap = '';
     let extraClass = '';
@@ -2413,7 +2429,7 @@ function pickSlot(el, time) {
     }
   }
   enforceTruckCountLimit(false);
-  let truckCount = parseFloat(document.getElementById('supTruckCount').value) || 1;
+  let truckCount = parseInt(document.getElementById('supTruckCount').value, 10) || 1;
   let truckType = document.getElementById('supTruckType').value;
   let requestedUnits = truckCount * truckUnitWeight(truckType);
   let whId = document.getElementById('bookingWarehouseSelect').value;
@@ -2476,7 +2492,8 @@ async function submitBooking() {
   let plate = document.getElementById('supPlate').value.trim();
   let driver = document.getElementById('supDriver').value.trim();
   let truckType = document.getElementById('supTruckType').value;
-  let truckCount = parseFloat(document.getElementById('supTruckCount').value);
+  enforceTruckCountLimit(false);
+  let truckCount = parseInt(document.getElementById('supTruckCount').value, 10);
   let cartons = parseInt(document.getElementById('supCartons').value);
   let palletLoading = '';
   let qty = '';
@@ -2504,10 +2521,10 @@ async function submitBooking() {
   if (!goodsType) { showAlert('bookAlert', 'يرجى اختيار نوع البضاعة', 'error'); return; }
   if (!truckType) { showAlert('bookAlert', 'يرجى اختيار نوع العربية', 'error'); return; }
   const maxTruckCount = maxTruckCountForType(truckType);
-  if (truckCount < 0.5 || truckCount > maxTruckCount) {
-    const msg = (truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات')
-      ? 'عدد التريلا يجب ألا يزيد عن 2'
-      : 'عدد العربيات يجب ألا يزيد عن 6';
+  if (!Number.isInteger(truckCount) || truckCount < 1 || truckCount > maxTruckCount) {
+    const msg = !Number.isInteger(truckCount)
+      ? 'عدد العربيات لازم يكون رقم صحيح بدون كسور'
+      : ((truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات') ? 'عدد التريلا يجب ألا يزيد عن 2' : 'عدد العربيات يجب ألا يزيد عن 6');
     showAlert('bookAlert', msg, 'error');
     return;
   }
@@ -2520,7 +2537,7 @@ async function submitBooking() {
   if (!unitWeight || unitWeight <= 0) { showAlert('bookAlert', 'نوع العربية غير صحيح', 'error'); return; }
 
   // Basic guards
-  if (isPastSlot(date, selectedSlot)) { showAlert('bookAlert', 'هذا الموعد انتهى وقته', 'error'); return; }
+  if (!isSupplierAdminUser(currentSupplierData) && isPastSlot(date, selectedSlot)) { showAlert('bookAlert', 'هذا الموعد انتهى وقته', 'error'); return; }
 
   // Build slot sequence starting from selectedSlot
   const startIdx = SLOTS_PER_DAY.indexOf(selectedSlot);
@@ -2555,7 +2572,7 @@ async function submitBooking() {
   for (let i = startIdx; i < SLOTS_PER_DAY.length && remainingUnits > 0; i++) {
     const slotTime = SLOTS_PER_DAY[i];
     // Skip blocked/past
-    if (isPastSlot(date, slotTime)) continue;
+    if (!isSupplierAdminUser(currentSupplierData) && isPastSlot(date, slotTime)) continue;
     if (isBlocked(whId, date, slotTime)) continue;
 
     const availableUnits = getSlotAvailableCapacity(whId, date, slotTime);
