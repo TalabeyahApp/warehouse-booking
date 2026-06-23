@@ -535,6 +535,7 @@ function closeSignupModal(){
           <option>عناية شخصية</option>
           <option>بيض</option>
           <option>مياه معدنيه</option>
+          <option>عصائر</option>
           <option>منتجات مبردة</option>
           <option>منتجات مجمدة</option>
           <option>أخرى</option>
@@ -2447,16 +2448,17 @@ function pickSlot(el, time) {
   checkCapacity();
 }
 
-function supplierHasBookingOnDate(supplierName, dateStr) {
+function supplierHasBookingOnDateForWarehouse(supplierName, dateStr, whId) {
   const sname = String(supplierName || '').trim();
-  if (!sname || !dateStr) return false;
-  for (let whId in warehouseData) {
-    const list = warehouseData[whId]?.bookings || [];
-    if (list.some(b => String(b.supplier || '').trim() === sname && String(b.date || '').trim() === dateStr && (b.status !== 'cancelled'))) {
-      return true;
-    }
-  }
-  return false;
+  const wid = String(whId || '').trim();
+  if (!sname || !dateStr || !wid) return false;
+  const list = warehouseData[wid]?.bookings || [];
+  return list.some(b =>
+    String(b.supplier || '').trim() === sname &&
+    String(b.date || '').trim() === dateStr &&
+    b.status !== 'cancelled' &&
+    b.status !== 'rejected'
+  );
 }
 
 async function submitBooking() {
@@ -2509,10 +2511,10 @@ async function submitBooking() {
     }
   }
 
-  // One booking per supplier per day (except supplier_admin)
+  // One booking per supplier per day per warehouse/branch (except supplier_admin)
   if (!isSupplierAdminUser(currentSupplierData)) {
-    if (supplierHasBookingOnDate(supplier, date)) {
-      showAlert('bookAlert', 'غير مسموح بأكثر من حجز في نفس اليوم.', 'error');
+    if (supplierHasBookingOnDateForWarehouse(supplier, date, whId)) {
+      showAlert('bookAlert', 'غير مسموح بأكثر من حجز في نفس اليوم لنفس الفرع.', 'error');
       return;
     }
   }
