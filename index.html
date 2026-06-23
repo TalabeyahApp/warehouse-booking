@@ -549,7 +549,7 @@ function closeSignupModal(){
         <div class="form-group"><label>اسم السائق</label><input type="text" id="supDriver" placeholder="محمد أحمد"></div>
       </div>
       <div class="form-row-3">
-        <div class="form-group"><label>نوع ��لعربية <span style="color:red">*</span></label><select id="supTruckType">
+        <div class="form-group"><label>نوع ��لعربية <span style="color:red">*</span></label><select id="supTruckType" onchange="enforceTruckCountLimit(true);checkCapacity()">
           <option value="">اختر...</option>
           <option>دبابة نص حمولة</option>
           <option>دبابة حمولة كاملة</option>
@@ -559,7 +559,7 @@ function closeSignupModal(){
           <option>تريلا بالتات</option>
           <option>تريلا بدون بالتات</option>
         </select></div>
-        <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="0.5" max="20" step="0.5" value="1" oninput="checkCapacity()"></div>
+        <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="0.5" max="6" step="0.5" value="1" oninput="enforceTruckCountLimit(true);checkCapacity()"></div>
         <div class="form-group"><label>عدد الكراتين <span style="color:red">*</span></label><input type="number" id="supCartons" min="1" max="5000" value="1" oninput="clampCartons()"></div>
       </div>
       <!-- تم حذف خيار التحميل على بالتات -->
@@ -899,6 +899,31 @@ const TRUCK_TYPE_WEIGHTS = {
 
 function truckUnitWeight(truckType) {
   return TRUCK_TYPE_WEIGHTS[truckType] ?? 1;
+}
+
+function maxTruckCountForType(truckType) {
+  return (truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات') ? 2 : 6;
+}
+
+function enforceTruckCountLimit(showMessage = false) {
+  const typeEl = document.getElementById('supTruckType');
+  const countEl = document.getElementById('supTruckCount');
+  if (!countEl) return true;
+  const truckType = typeEl ? typeEl.value : '';
+  const max = maxTruckCountForType(truckType);
+  countEl.max = String(max);
+  const v = parseFloat(countEl.value);
+  if (Number.isFinite(v) && v > max) {
+    countEl.value = String(max);
+    if (showMessage) {
+      const msg = (truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات')
+        ? 'أقصى عدد للتريلا هو 2 عربية'
+        : 'أقصى عدد للعربيات هو 6';
+      showAlert('bookAlert', msg, 'error');
+    }
+    return false;
+  }
+  return true;
 }
 
 let warehouseData = {};
@@ -1800,6 +1825,8 @@ function checkCapacity() {
   let time = selectedTimeElem ? selectedTimeElem.getAttribute('data-time') : null;
   let whId = document.getElementById('bookingWarehouseSelect').value;
   let truckType = document.getElementById('supTruckType').value;
+  enforceTruckCountLimit(false);
+  truckCount = parseFloat(document.getElementById('supTruckCount').value) || 1;
   let unitWeight = truckUnitWeight(truckType);
   let requestedUnits = truckCount * unitWeight;
   
@@ -2385,6 +2412,7 @@ function pickSlot(el, time) {
       return;
     }
   }
+  enforceTruckCountLimit(false);
   let truckCount = parseFloat(document.getElementById('supTruckCount').value) || 1;
   let truckType = document.getElementById('supTruckType').value;
   let requestedUnits = truckCount * truckUnitWeight(truckType);
@@ -2475,7 +2503,14 @@ async function submitBooking() {
   // Optional: orderNum, plate, driver
   if (!goodsType) { showAlert('bookAlert', 'يرجى اختيار نوع البضاعة', 'error'); return; }
   if (!truckType) { showAlert('bookAlert', 'يرجى اختيار نوع العربية', 'error'); return; }
-  if (truckCount < 0.5 || truckCount > 20) { showAlert('bookAlert', 'عدد العربيات يجب أن يكون بين 0.5 و 20', 'error'); return; }
+  const maxTruckCount = maxTruckCountForType(truckType);
+  if (truckCount < 0.5 || truckCount > maxTruckCount) {
+    const msg = (truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات')
+      ? 'عدد التريلا يجب ألا يزيد عن 2'
+      : 'عدد العربيات يجب ألا يزيد عن 6';
+    showAlert('bookAlert', msg, 'error');
+    return;
+  }
   if (cartons <= 0) { showAlert('bookAlert', 'عدد الكراتين يجب أن يكون أكبر من صفر', 'error'); return; }
   if (!date) { showAlert('bookAlert', 'يرجى اختيار التاريخ', 'error'); return; }
   if (!selectedSlot) { showAlert('bookAlert', 'يرجى اختيار الوقت', 'error'); return; }
@@ -3583,7 +3618,8 @@ document.getElementById('myBookingsTo').onchange = renderMyBookings;
 document.getElementById('myBookingsSupplier').oninput = renderMyBookings;
 document.getElementById('supCode').oninput = fillSupplierNameFromCode;
 document.getElementById('supNameSelect').onchange = onSupplierNameDropdownChange;
-document.getElementById('supTruckCount').oninput = checkCapacity;
+document.getElementById('supTruckType').onchange = () => { enforceTruckCountLimit(true); checkCapacity(); };
+document.getElementById('supTruckCount').oninput = () => { enforceTruckCountLimit(true); checkCapacity(); };
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
 document.getElementById('exportAllBtn').onclick = exportAllReports;
 // Old report buttons were removed from UI; keep functions for backward-compat but don't bind.
