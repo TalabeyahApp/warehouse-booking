@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>نظام حجز استلامات المخازن</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- Google Apps Script API (Sheets backend) -->
+<!-- Remote API -->
 <script>
   const API_URL = "https://script.google.com/macros/s/AKfycbxQdTlYfYmKHFqM6Lz1VmgcySQIsRvmIGok6_RnxXgqWZQyfnm_mt4uV__0vZWmeRuhsw/exec";
   async function apiGet(action, params = {}) {
@@ -37,7 +37,7 @@
       return res;
     }
 
-    // Google Apps Script Web App often responds with 302 to a googleusercontent.com URL.
+    // Remote API Web App often responds with 302 to a googleusercontent.com URL.
     // Browsers convert POST -> GET on 302, which drops the body, so writes won't happen.
     // Fix: follow redirect manually and re-POST to the Location.
     let res = await doPost(API_URL);
@@ -500,26 +500,6 @@ function closeSignupModal(){
     <img class="page-logo" src="data:image/png;base64,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" alt="Talabeya">
   </div>
 
-  <div class="report-card" style="margin-bottom:16px">
-    <div class="report-card-head">
-      <div>
-        <div class="report-card-title">📌 حجوزاتي</div>
-        <div class="report-card-sub"></div>
-      </div>
-    </div>
-    <div class="report-filters" style="margin-top:0">
-      <div class="date-filter-field"><label>From</label><input type="date" class="date-input" id="myBookingsFrom" placeholder="من"></div>
-      <div class="date-filter-field"><label>To</label><input type="date" class="date-input" id="myBookingsTo" placeholder="إلى"></div>
-      <input type="text" class="date-input" id="myBookingsSupplier" placeholder="اسم المورد" style="min-width:180px;display:none">
-    </div>
-    <div style="overflow-x:auto;max-height:220px">
-      <table class="preview-table" style="margin-top:0">
-        <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>المورد</th><th>التاريخ</th><th>الوقت</th><th>عدد العربيات</th><th>الحالة</th><th>إجراء</th></tr></thead>
-        <tbody id="myBookingsTbody"></tbody>
-      </table>
-    </div>
-  </div>
-  
   <!-- اختيار المخزن عند الحجز -->
   <div class="warehouse-selector">
     <label>🏭 اختر المخزن المراد الحجز فيه:</label>
@@ -591,6 +571,26 @@ function closeSignupModal(){
       <div class="panel"><h2>⏰ اختر الوقت (9ص - 4م)</h2><div class="slots-picker-grid" id="supplierSlots"><div class="empty-state"><div class="icon">📅</div><p>اختر التاريخ أولاً</p></div></div></div>
       <div class="tracker-wrap" id="trackerWrap" style="display:none"><h2>📦 تتبع حجزك</h2><div class="form-row" style="margin-bottom:12px"><div class="form-group" style="margin:0"><label>رقم الحجز</label><input type="text" id="trackId" placeholder="HYG-XXXX"></div><button class="btn-primary" id="trackBtn" style="width:auto;padding:8px 18px">تتبع</button></div><div id="trackResult"></div></div>
       <button class="btn-primary" id="showTrackerBtn" style="background:var(--ink);margin-top:12px">🔍 تتبع حجز موجود</button>
+    </div>
+  </div>
+
+  <div class="report-card" style="margin-bottom:16px">
+    <div class="report-card-head">
+      <div>
+        <div class="report-card-title">📌 حجوزاتي</div>
+        <div class="report-card-sub"></div>
+      </div>
+    </div>
+    <div class="report-filters" style="margin-top:0">
+      <div class="date-filter-field"><label>From</label><input type="date" class="date-input" id="myBookingsFrom" placeholder="من"></div>
+      <div class="date-filter-field"><label>To</label><input type="date" class="date-input" id="myBookingsTo" placeholder="إلى"></div>
+      <input type="text" class="date-input" id="myBookingsSupplier" placeholder="اسم المورد" style="min-width:180px;display:none">
+    </div>
+    <div style="overflow-x:auto;max-height:220px">
+      <table class="preview-table" style="margin-top:0">
+        <thead><tr><th>رقم الحجز</th><th>رقم الدور</th><th>المورد</th><th>التاريخ</th><th>الوقت</th><th>عدد العربيات</th><th>الحالة</th><th>إجراء</th></tr></thead>
+        <tbody id="myBookingsTbody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -952,7 +952,7 @@ function saveSupplierUsers(users) {
 // Initialize suppliers from storage
 suppliers = loadSupplierUsers();
 
-// ==================== USERS SYNC (Google Sheets) ====================
+// ==================== USERS SYNC (قاعدة البيانات) ====================
 let remoteWarehouseUsers = null;
 let remoteSuppliers = null;
 
@@ -964,7 +964,7 @@ async function loadUsersFromApi() {
     ]);
     if (wRes && wRes.ok && Array.isArray(wRes.data)) {
       remoteWarehouseUsers = wRes.data;
-      // Keep local modal data in sync with Google Sheet, including deleted rows
+      // Keep local modal data in sync with قاعدة البيانات, including deleted rows
       if (remoteWarehouseUsers.length) {
         saveWarehouseUsers(remoteWarehouseUsers.map(u => ({
           username: u.username || '',
@@ -978,7 +978,7 @@ async function loadUsersFromApi() {
     if (sRes && sRes.ok && Array.isArray(sRes.data)) {
       remoteSuppliers = sRes.data;
       // If supplier users exist remotely, use them for login and modal rendering.
-      // This also removes rows locally when they were deleted directly from Google Sheet.
+      // This also removes rows locally when they were deleted directly from قاعدة البيانات.
       suppliers = remoteSuppliers.map(x => ({
         username: x.username || '',
         email: x.email || '',
@@ -1212,7 +1212,7 @@ async function loadWarehouseDataFromApi() {
       try {
         const d = new Date(v);
         if (isNaN(d.getTime())) return '';
-        // IMPORTANT: Google Sheets often returns time-only cells as Date objects.
+        // IMPORTANT: قاعدة البيانات often returns time-only cells as Date objects.
         // When serialized to ISO they are shifted to UTC. We must read as UTC here
         // so the time stays consistent across devices.
         const hh = String(d.getUTCHours()).padStart(2,'0');
@@ -1277,7 +1277,7 @@ async function loadWarehouseDataFromApi() {
       warehouseData[whId].blockedSlots.push(getSlotKey(date, time));
     });
 
-    // capacity overrides (prefer parsing from id to avoid Sheets time/date coercion)
+    // capacity overrides (prefer parsing from id to avoid time/date coercion)
     (caps || []).forEach(x => {
       const whId = x.warehouseId || x.warehouse || x.warehouseid;
       let date = '';
@@ -1413,7 +1413,7 @@ async function refreshDataWithLoaderSafe() {
   } catch(e) {
     console.error(e);
     try { hideLoader(); } catch(_) {}
-    alert('تعذر تحميل البيانات. تأكد من رابط Google Apps Script (exec) وأن ping يرجع JSON.');
+    alert('تعذر تحميل البيانات. تأكد من رابط Remote API (exec) وأن ping يرجع JSON.');
     return false;
   }
 }
@@ -1429,7 +1429,7 @@ const PENDING_BOOKING_SYNC_KEY = 'pendingBookingSync';
 function bookingApiPayload(whId, booking) {
   const dateStr = (booking.date || '').trim();
   const timeStr = (booking.time || '').trim();
-  // Force Sheets to store as text to avoid timezone / 1899-date conversions
+  // Force storage to store as text to avoid timezone / 1899-date conversions
   const sheetDate = dateStr ? ("'" + dateStr) : '';
   const sheetTime = timeStr ? ("'" + timeStr) : '';
   const payload = {
@@ -1641,13 +1641,13 @@ function downloadExcel(sheets, filename) {
   let wb = XLSX.utils.book_new();
   sheets.forEach(({name, data}) => {
     let ws = XLSX.utils.aoa_to_sheet(data);
-    XLSX.utils.book_append_sheet(wb, ws, String(name || 'Sheet1').slice(0,31));
+    XLSX.utils.book_append_sheet(wb, ws, String(name || 'Report1').slice(0,31));
   });
   XLSX.writeFile(wb, filename || 'report.xlsx');
 }
 
 // Export all reports in one file (used by top button)
-function exportAllSheets() {
+function exportAllReports() {
   let whFilter = document.getElementById('reportsWarehouseFilter')?.value || '';
   // Bookings
   let bookingsList = getAllBookings(whFilter);
@@ -1960,7 +1960,7 @@ function toggleBlock(date, time) {
     isBlockedNow = true;
   }
   saveWarehouseData(whId);
-  // Sync to Sheets
+  // Sync shared data
   upsertBlockedSlotToApi(whId, date, time, isBlockedNow);
   renderWarehouse();
 }
@@ -1982,7 +1982,7 @@ function editSlotCapacity(date, time) {
   if (!v) {
     delete warehouseData[whId].slotCapacityOverrides[key];
     saveWarehouseData(whId);
-    // Sync delete to Sheets so all users fall back to default capacity
+    // Sync delete to remote storage so all users fall back to default capacity
     try {
       showLoader('جاري التحميل...');
       apiGet('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` })
@@ -1999,7 +1999,7 @@ function editSlotCapacity(date, time) {
   }
   warehouseData[whId].slotCapacityOverrides[key] = n;
   saveWarehouseData(whId);
-  // Sync to Sheets (shared)
+  // Sync to shared storage
   try {
     showLoader('جاري التحميل...');
     apiGet('upsertSlotCapacityOverride', {
@@ -2419,13 +2419,13 @@ async function submitBooking() {
   if (!currentSupplierData) { showAlert('bookAlert', 'خطأ في تسجيل الدخول', 'error'); return; }
   
   let supplier = document.getElementById('supName').value.trim();
-  // supplier_admin can book for any supplier name that exists in Google Sheet (Suppliers tab)
+  // supplier_admin can book for any supplier name that exists in قاعدة البيانات (Suppliers tab)
   if (isSupplierAdminUser(currentSupplierData)) {
     if (!supplier) { showAlert('bookAlert', 'يرجى كتابة اسم المورد', 'error'); return; }
     const list = Array.isArray(remoteSuppliers) ? remoteSuppliers : [];
     const ok = list.some(s => String(s.company || '').trim().toLowerCase() === supplier.toLowerCase());
     if (!ok) {
-      showAlert('bookAlert', 'اسم المورد غير موجود في جوجل شيت', 'error');
+      showAlert('bookAlert', 'اسم المورد غير موجود', 'error');
       return;
     }
   } else if (canBookAnySupplierByCode(currentSupplierData)) {
@@ -2436,7 +2436,7 @@ async function submitBooking() {
     }
     const matchByCode = findSupplierByCode(typedCode);
     if (!matchByCode || !String(matchByCode.company || '').trim()) {
-      showAlert('bookAlert', 'كود المورد غير موجود في جوجل شيت', 'error');
+      showAlert('bookAlert', 'كود المورد غير موجود', 'error');
       return;
     }
     supplier = String(matchByCode.company || '').trim();
@@ -2595,7 +2595,7 @@ async function submitBooking() {
 
   saveWarehouseData(whId);
 
-  // Sync to Google Sheet before showing final success.
+  // Sync to قاعدة البيانات before showing final success.
   // If connection fails, keep the booking locally and retry automatically later.
   showLoader('جاري حفظ الحجز...');
   let syncOk = false;
@@ -2613,8 +2613,8 @@ async function submitBooking() {
   renderMyBookings();
 
   let message = syncOk
-    ? `✅ تم تأكيد الحجز وحفظه في Google Sheet! أرقام الحجز: ${createdIds.join(', ')}`
-    : `⚠️ تم إنشاء رقم الحجز محليًا: ${createdIds.join(', ')} — الاتصال فصل قبل الحفظ في Google Sheet، وسيتم إعادة المحاولة تلقائيًا عند رجوع الاتصال. لا تعيد الحجز مرة أخرى.`;
+    ? `✅ تم تأكيد الحجز وحفظه بنجاح! أرقام الحجز: ${createdIds.join(', ')}`
+    : `⚠️ تم إنشاء رقم الحجز محليًا: ${createdIds.join(', ')} — الاتصال فصل قبل الحفظ النهائي، وسيتم إعادة المحاولة تلقائيًا عند رجوع الاتصال. لا تعيد الحجز مرة أخرى.`;
   showAlert('bookAlert', message, 'success');
   
   document.getElementById('supOrder').value = '';
@@ -2941,7 +2941,7 @@ async function doSignup() {
   if (!password) { alert('يرجى إدخال كلمة المرور'); return; }
   if (password !== confirm) { alert('كلمة المرور غير متطابقة'); return; }
 
-  // Ensure latest supplier users loaded from Sheets first
+  // Ensure latest supplier users loaded from remote data first
   try { await loadUsersFromApi(); } catch(e) {}
   if (suppliers.find(s => s.username === username)) { alert('اسم المستخدم موجود بالفعل'); return; }
   if (suppliers.find(s => (s.email||'').toLowerCase() === email)) { alert('البريد الإلكتروني مستخدم بالفعل'); return; }
@@ -2950,7 +2950,7 @@ async function doSignup() {
   suppliers.push({ username, email, password, company, defaultWarehouse: warehouse, createdAt: new Date().toISOString() });
   localStorage.setItem('suppliers', JSON.stringify(suppliers));
 
-  // Save to Google Sheets (shared across devices)
+  // Save to قاعدة البيانات (shared across devices)
   try {
     await apiPost('upsertSupplier', {
       username,
@@ -3097,7 +3097,7 @@ function deleteWarehouseUserRow(idx) {
   if (!confirm('هل تريد حذف هذا المستخدم؟')) return;
   users.splice(idx, 1);
   saveWarehouseUsers(users);
-  // Sync delete to Google Sheets (best-effort)
+  // Sync delete to قاعدة البيانات (best-effort)
   apiGet('deleteWarehouseUser', { username: u.username }).catch(()=>{});
   renderUsersModal();
 }
@@ -3196,7 +3196,7 @@ async function saveSupplierUsersFromModal() {
   saveSupplierUsers(list);
   suppliers = loadSupplierUsers();
 
-  // Sync to Google Sheets via GET (avoids Apps Script POST redirect issue)
+  // Sync to قاعدة البيانات via GET (avoids Apps Script POST redirect issue)
   try {
     showLoader('جاري الحفظ...');
     for (let u of list) {
@@ -3214,11 +3214,11 @@ async function saveSupplierUsersFromModal() {
       if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save supplier');
     }
     await loadUsersFromApi();
-    alert('✅ تم حفظ مستخدمي الموردين في Google Sheet');
+    alert('✅ تم حفظ مستخدمي الموردين بنجاح');
     document.getElementById('supplierUsersModal')?.classList.remove('open');
   } catch (e) {
     console.error(e);
-    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ في Google Sheet. تأكد من رابط Apps Script والأعمدة.');
+    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ النهائي. تأكد من رابط الربط والأعمدة.');
   } finally {
     hideLoader();
   }
@@ -3273,7 +3273,7 @@ async function saveUsersFromModal() {
 
   saveWarehouseUsers(users);
 
-  // Sync to Google Sheets via GET (avoids Apps Script POST redirect issue)
+  // Sync to قاعدة البيانات via GET (avoids Apps Script POST redirect issue)
   try {
     showLoader('جاري الحفظ...');
     for (let u of users) {
@@ -3288,11 +3288,11 @@ async function saveUsersFromModal() {
       if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to save warehouse user');
     }
     await loadUsersFromApi();
-    alert('✅ تم حفظ مستخدمي المخازن في Google Sheet');
+    alert('✅ تم حفظ مستخدمي المخازن بنجاح');
     document.getElementById('usersModal')?.classList.remove('open');
   } catch (e) {
     console.error(e);
-    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ في Google Sheet. تأكد من رابط Apps Script والأعمدة.');
+    alert('⚠️ تم الحفظ محليًا لكن لم يتم الحفظ النهائي. تأكد من رابط الربط والأعمدة.');
   } finally {
     hideLoader();
   }
@@ -3488,7 +3488,7 @@ async function doLogin() {
   let pass = normalizePassword(document.getElementById('loginPass').value);
   let err = document.getElementById('loginError');
 
-  // Always load latest users from Google Sheets before attempting login
+  // Always load latest users from قاعدة البيانات before attempting login
   try { await loadUsersFromApi(); } catch (e) {}
   
   if (selectedLoginRole === 'warehouse') {
@@ -3585,7 +3585,7 @@ document.getElementById('supCode').oninput = fillSupplierNameFromCode;
 document.getElementById('supNameSelect').onchange = onSupplierNameDropdownChange;
 document.getElementById('supTruckCount').oninput = checkCapacity;
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
-document.getElementById('exportAllBtn').onclick = exportAllSheets;
+document.getElementById('exportAllBtn').onclick = exportAllReports;
 // Old report buttons were removed from UI; keep functions for backward-compat but don't bind.
 // Supplier signup is disabled
 document.getElementById('closeSignupBtn').onclick = closeSignupModal;
@@ -4078,7 +4078,7 @@ initWarehouseData();
 document.getElementById('whDate').value = today();
 
 // Restore session after refresh
-// Restore session after refresh (ensure latest users are loaded from Sheets first)
+// Restore session after refresh (ensure latest users are loaded from remote data first)
 (async function restoreSession() {
   // Keep loader visible during refresh to avoid flashing the login/main screens
   const st = loadSessionState();
