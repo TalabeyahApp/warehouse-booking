@@ -194,6 +194,15 @@ body.boot-loading #loaderOverlay{display:flex !important}
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--accent);background:var(--surface)}
 .form-group input:read-only{background:#f0f0ec;color:#555}
 .form-group textarea{resize:vertical;min-height:70px}
+.goods-checkbox-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;background:var(--paper);border:1px solid var(--border);border-radius:var(--r);padding:10px;max-height:190px;overflow-y:auto}
+.goods-check{display:flex!important;align-items:center;gap:7px;margin:0!important;font-size:12px!important;font-weight:600!important;text-transform:none!important;letter-spacing:0!important;color:var(--ink)!important;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 8px}
+.goods-check input{width:15px!important;height:15px!important;margin:0;cursor:pointer}
+.truck-lines{display:flex;flex-direction:column;gap:8px}
+.truck-line{display:grid;grid-template-columns:1.6fr .8fr auto;gap:8px;align-items:end;background:var(--paper);border:1px solid var(--border);border-radius:var(--r);padding:10px}
+.truck-line label{margin-bottom:4px!important}
+.truck-line select,.truck-line input{background:var(--surface)!important}
+.btn-add-truck{width:auto;background:var(--ink);color:#fff;border:none;border-radius:var(--r);padding:8px 12px;font-family:var(--font);font-weight:700;cursor:pointer;margin-top:8px}
+.btn-remove-truck{background:var(--red-light);color:var(--red);border:1px solid #f0b9b5;border-radius:8px;padding:8px 10px;font-weight:800;cursor:pointer}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .radio-group{display:flex;gap:16px;align-items:center;margin-top:6px}
@@ -525,42 +534,52 @@ function closeSignupModal(){
       <div class="form-group"><label>اسم المورد / الشركة</label><input type="text" id="supName" readonly style="background:#f0f0ec" placeholder="اكتب اسم المورد"><select class="date-input" id="supNameSelect" style="display:none;width:100%;margin-top:0"></select></div>
       <div class="form-row">
         <div class="form-group"><label>رقم الأوردر</label><input type="text" id="supOrder" placeholder="PO-12345"></div>
-        <div class="form-group"><label>نوع البضاعة <span style="color:red">*</span></label><select id="supType">
-          <option value="">اختر...</option>
-          <option>بقالة - سلع اساسية</option>
-          <option>منتجات الالبان</option>
-          <option>حلويات و سناكس</option>
-          <option>مشروبات ساخنه</option>
-          <option>مشروبات غازيه</option>
-          <option>عناية شخصية</option>
-          <option>بيض</option>
-          <option>مياه معدنيه</option>
-          <option>عصائر</option>
-          <option>منتجات مبردة</option>
-          <option>منتجات مجمدة</option>
-          <option>أخرى</option>
-          <option>مواد تعبئة</option>
-          <option>مواد خام</option>
-          <option>منظفات ومطهرات</option>
-          <option>لا غذائي</option>
-        </select></div>
+        <div class="form-group"><label>نوع البضاعة <span style="color:red">*</span></label>
+          <div class="goods-checkbox-grid" id="supTypeChecks">
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="بقالة - سلع اساسية"> بقالة - سلع اساسية</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="منتجات الالبان"> منتجات الالبان</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="حلويات و سناكس"> حلويات و سناكس</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="مشروبات ساخنه"> مشروبات ساخنه</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="مشروبات غازيه"> مشروبات غازيه</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="عناية شخصية"> عناية شخصية</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="بيض"> بيض</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="مياه معدنيه"> مياه معدنيه</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="عصائر"> عصائر</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="منتجات مبردة"> منتجات مبردة</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="منتجات مجمدة"> منتجات مجمدة</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="أخرى"> أخرى</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="مواد تعبئة"> مواد تعبئة</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="مواد خام"> مواد خام</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="منظفات ومطهرات"> منظفات ومطهرات</label>
+            <label class="goods-check"><input type="checkbox" name="goodsType" value="لا غذائي"> لا غذائي</label>
+          </div>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>رقم السيارة</label><input type="text" id="supPlate" placeholder="أ ب ج 1234"></div>
         <div class="form-group"><label>اسم السائق</label><input type="text" id="supDriver" placeholder="محمد أحمد"></div>
       </div>
-      <div class="form-row-3">
-        <div class="form-group"><label>نوع ��لعربية <span style="color:red">*</span></label><select id="supTruckType" onchange="enforceTruckCountLimit(true);checkCapacity()">
-          <option value="">اختر...</option>
-          <option>دبابة نص حمولة</option>
-          <option>دبابة حمولة كاملة</option>
-          <option>جامبو برامب</option>
-          <option>جامبو بدون رامب بالتات</option>
-          <option>جامبو بدون رامب بدون بالتات</option>
-          <option>تريلا بالتات</option>
-          <option>تريلا بدون بالتات</option>
-        </select></div>
-        <div class="form-group"><label>عدد العربيات <span style="color:red">*</span></label><input type="number" id="supTruckCount" min="1" max="6" step="1" value="1" oninput="enforceTruckCountLimit(true);checkCapacity()"></div>
+      <div class="form-group">
+        <label>العربيات <span style="color:red">*</span></label>
+        <div class="truck-lines" id="truckLines">
+          <div class="truck-line">
+            <div><label>نوع العربية</label><select id="supTruckType" class="truck-type" onchange="enforceTruckLineLimit(this,true);checkCapacity()">
+              <option value="">اختر...</option>
+              <option>دبابة نص حمولة</option>
+              <option>دبابة حمولة كاملة</option>
+              <option>جامبو برامب</option>
+              <option>جامبو بدون رامب بالتات</option>
+              <option>جامبو بدون رامب بدون بالتات</option>
+              <option>تريلا بالتات</option>
+              <option>تريلا بدون بالتات</option>
+            </select></div>
+            <div><label>العدد</label><input type="number" id="supTruckCount" class="truck-count" min="1" max="6" step="1" value="1" oninput="enforceTruckLineLimit(this,true);checkCapacity()"></div>
+            <button type="button" class="btn-remove-truck" style="visibility:hidden">حذف</button>
+          </div>
+        </div>
+        <button type="button" class="btn-add-truck" onclick="addTruckLine()">+ إضافة نوع عربية تاني</button>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label>عدد الكراتين <span style="color:red">*</span></label><input type="number" id="supCartons" min="1" max="5000" value="1" oninput="clampCartons()"></div>
       </div>
       <!-- تم حذف خيار التحميل على بالتات -->
@@ -906,9 +925,43 @@ function maxTruckCountForType(truckType) {
   return (truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات') ? 2 : 6;
 }
 
-function enforceTruckCountLimit(showMessage = false) {
-  const typeEl = document.getElementById('supTruckType');
-  const countEl = document.getElementById('supTruckCount');
+function truckLineTemplate() {
+  return `<div class="truck-line">
+    <div><label>نوع العربية</label><select class="truck-type" onchange="enforceTruckLineLimit(this,true);checkCapacity()">
+      <option value="">اختر...</option>
+      <option>دبابة نص حمولة</option>
+      <option>دبابة حمولة كاملة</option>
+      <option>جامبو برامب</option>
+      <option>جامبو بدون رامب بالتات</option>
+      <option>جامبو بدون رامب بدون بالتات</option>
+      <option>تريلا بالتات</option>
+      <option>تريلا بدون بالتات</option>
+    </select></div>
+    <div><label>العدد</label><input type="number" class="truck-count" min="1" max="6" step="1" value="1" oninput="enforceTruckLineLimit(this,true);checkCapacity()"></div>
+    <button type="button" class="btn-remove-truck" onclick="removeTruckLine(this)">حذف</button>
+  </div>`;
+}
+
+function addTruckLine() {
+  const box = document.getElementById('truckLines');
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', truckLineTemplate());
+  checkCapacity();
+}
+
+function removeTruckLine(btn) {
+  const row = btn?.closest('.truck-line');
+  const box = document.getElementById('truckLines');
+  if (!row || !box || box.querySelectorAll('.truck-line').length <= 1) return;
+  row.remove();
+  checkCapacity();
+}
+
+function enforceTruckLineLimit(el, showMessage = false) {
+  const row = el?.closest?.('.truck-line') || document.querySelector('.truck-line');
+  if (!row) return true;
+  const typeEl = row.querySelector('.truck-type');
+  const countEl = row.querySelector('.truck-count');
   if (!countEl) return true;
   const truckType = typeEl ? typeEl.value : '';
   const max = maxTruckCountForType(truckType);
@@ -935,6 +988,50 @@ function enforceTruckCountLimit(showMessage = false) {
   }
   return true;
 }
+
+function enforceTruckCountLimit(showMessage = false) {
+  let ok = true;
+  document.querySelectorAll('.truck-line').forEach(row => {
+    if (!enforceTruckLineLimit(row.querySelector('.truck-count') || row.querySelector('.truck-type'), showMessage)) ok = false;
+  });
+  return ok;
+}
+
+function getTruckLines(validate = false) {
+  const rows = Array.from(document.querySelectorAll('.truck-line'));
+  const lines = [];
+  for (const row of rows) {
+    const type = String(row.querySelector('.truck-type')?.value || '').trim();
+    const count = parseInt(row.querySelector('.truck-count')?.value || '', 10);
+    if (!type && !Number.isFinite(count)) continue;
+    if (validate && !type) return { ok:false, message:'يرجى اختيار نوع العربية لكل سطر', lines:[] };
+    if (validate && (!Number.isInteger(count) || count < 1)) return { ok:false, message:'عدد العربيات لازم يكون رقم صحيح أكبر من صفر', lines:[] };
+    const max = maxTruckCountForType(type);
+    if (validate && count > max) return { ok:false, message:(type === 'تريلا بالتات' || type === 'تريلا بدون بالتات') ? 'عدد التريلا يجب ألا يزيد عن 2' : 'عدد العربيات يجب ألا يزيد عن 6', lines:[] };
+    if (type && Number.isInteger(count) && count > 0) lines.push({ type, count, units: count * truckUnitWeight(type) });
+  }
+  if (validate && !lines.length) return { ok:false, message:'يرجى اختيار نوع العربية والعدد', lines:[] };
+  return { ok:true, lines };
+}
+
+function summarizeTruckLines(lines) {
+  return (lines || []).map(x => `${x.type} × ${x.count}`).join('، ');
+}
+
+function resetTruckLines() {
+  const box = document.getElementById('truckLines');
+  if (!box) return;
+  const first = box.querySelector('.truck-line');
+  box.innerHTML = '';
+  if (first) {
+    const type = first.querySelector('.truck-type');
+    const count = first.querySelector('.truck-count');
+    if (type) type.value = '';
+    if (count) count.value = '1';
+    box.appendChild(first);
+  }
+}
+
 
 let warehouseData = {};
 // ==================== USERS ====================
@@ -1830,15 +1927,12 @@ function checkCapacity() {
   if (!currentSupplierData) return;
   
   let date = document.getElementById('supDate').value;
-  let truckCount = parseInt(document.getElementById('supTruckCount').value, 10) || 1;
   let selectedTimeElem = document.querySelector('.slot-pick.selected');
   let time = selectedTimeElem ? selectedTimeElem.getAttribute('data-time') : null;
   let whId = document.getElementById('bookingWarehouseSelect').value;
-  let truckType = document.getElementById('supTruckType').value;
   enforceTruckCountLimit(false);
-  truckCount = parseInt(document.getElementById('supTruckCount').value, 10) || 1;
-  let unitWeight = truckUnitWeight(truckType);
-  let requestedUnits = truckCount * unitWeight;
+  const truckInfo = getTruckLines(false);
+  let requestedUnits = (truckInfo.lines || []).reduce((s,x)=>s+x.units,0) || 1;
   
   let warningMsg = document.getElementById('capacityWarningMsg');
   let errorMsg = document.getElementById('capacityErrorMsg');
@@ -2430,9 +2524,8 @@ function pickSlot(el, time) {
     }
   }
   enforceTruckCountLimit(false);
-  let truckCount = parseInt(document.getElementById('supTruckCount').value, 10) || 1;
-  let truckType = document.getElementById('supTruckType').value;
-  let requestedUnits = truckCount * truckUnitWeight(truckType);
+  const truckInfo = getTruckLines(false);
+  let requestedUnits = (truckInfo.lines || []).reduce((s,x)=>s+x.units,0) || 1;
   let whId = document.getElementById('bookingWarehouseSelect').value;
   let available = getSlotAvailableCapacity(whId, date, time);
   
@@ -2459,6 +2552,23 @@ function supplierHasBookingOnDateForWarehouse(supplierName, dateStr, whId) {
     b.status !== 'cancelled' &&
     b.status !== 'rejected'
   );
+}
+
+function getSelectedGoodsTypes() {
+  return Array.from(document.querySelectorAll('input[name="goodsType"]:checked'))
+    .map(x => String(x.value || '').trim())
+    .filter(Boolean)
+    .join('، ');
+}
+
+function clearSelectedGoodsTypes() {
+  document.querySelectorAll('input[name="goodsType"]').forEach(x => { x.checked = false; });
+}
+
+function splitGoodsTypes(v) {
+  const text = String(v || '').trim();
+  if (!text) return ['—'];
+  return text.split(/،|,/).map(x => x.trim()).filter(Boolean);
 }
 
 async function submitBooking() {
@@ -2490,12 +2600,17 @@ async function submitBooking() {
     if (supNameEl) supNameEl.value = supplier;
   }
   let orderNum = document.getElementById('supOrder').value.trim();
-  let goodsType = document.getElementById('supType').value;
+  let goodsType = getSelectedGoodsTypes();
   let plate = document.getElementById('supPlate').value.trim();
   let driver = document.getElementById('supDriver').value.trim();
-  let truckType = document.getElementById('supTruckType').value;
   enforceTruckCountLimit(false);
-  let truckCount = parseInt(document.getElementById('supTruckCount').value, 10);
+  const truckInfo = getTruckLines(true);
+  if (!truckInfo.ok) { showAlert('bookAlert', truckInfo.message, 'error'); return; }
+  const truckLines = truckInfo.lines;
+  let truckType = summarizeTruckLines(truckLines);
+  let truckCount = truckLines.reduce((s,x)=>s+x.count,0);
+  let totalUnitsRequested = truckLines.reduce((s,x)=>s+x.units,0);
+  let avgUnitWeight = totalUnitsRequested / truckCount;
   let cartons = parseInt(document.getElementById('supCartons').value);
   let palletLoading = '';
   let qty = '';
@@ -2521,22 +2636,13 @@ async function submitBooking() {
 
   // Optional: orderNum, plate, driver
   if (!goodsType) { showAlert('bookAlert', 'يرجى اختيار نوع البضاعة', 'error'); return; }
-  if (!truckType) { showAlert('bookAlert', 'يرجى اختيار نوع العربية', 'error'); return; }
-  const maxTruckCount = maxTruckCountForType(truckType);
-  if (!Number.isInteger(truckCount) || truckCount < 1 || truckCount > maxTruckCount) {
-    const msg = !Number.isInteger(truckCount)
-      ? 'عدد العربيات لازم يكون رقم صحيح بدون كسور'
-      : ((truckType === 'تريلا بالتات' || truckType === 'تريلا بدون بالتات') ? 'عدد التريلا يجب ألا يزيد عن 2' : 'عدد العربيات يجب ألا يزيد عن 6');
-    showAlert('bookAlert', msg, 'error');
-    return;
-  }
+  if (!truckType || !truckLines.length) { showAlert('bookAlert', 'يرجى اختيار نوع العربية والعدد', 'error'); return; }
   if (cartons <= 0) { showAlert('bookAlert', 'عدد الكراتين يجب أن يكون أكبر من صفر', 'error'); return; }
   if (!date) { showAlert('bookAlert', 'يرجى اختيار التاريخ', 'error'); return; }
   if (!selectedSlot) { showAlert('bookAlert', 'يرجى اختيار الوقت', 'error'); return; }
 
   // ===== Spillover booking across next slots if needed (by capacity-units) =====
-  const unitWeight = truckUnitWeight(truckType);
-  if (!unitWeight || unitWeight <= 0) { showAlert('bookAlert', 'نوع العربية غير صحيح', 'error'); return; }
+  if (!totalUnitsRequested || totalUnitsRequested <= 0) { showAlert('bookAlert', 'نوع العربية غير صحيح', 'error'); return; }
 
   // Basic guards
   if (!isSupplierAdminUser(currentSupplierData) && isPastSlot(date, selectedSlot)) { showAlert('bookAlert', 'هذا الموعد انتهى وقته', 'error'); return; }
@@ -2545,7 +2651,6 @@ async function submitBooking() {
   const startIdx = SLOTS_PER_DAY.indexOf(selectedSlot);
   if (startIdx < 0) { showAlert('bookAlert', 'الوقت المختار غير صحيح', 'error'); return; }
 
-  let totalUnitsRequested = truckCount * unitWeight;
   let remainingUnits = totalUnitsRequested;
   let remainingCartons = cartons;
   let createdAt = new Date().toISOString();
@@ -2585,7 +2690,7 @@ async function submitBooking() {
     if (allocateUnits <= 0) continue;
 
     // Derive truckCount portion for display (can be fractional)
-    const allocateTrucks = allocateUnits / unitWeight;
+    const allocateTrucks = allocateUnits / avgUnitWeight;
 
     // Split cartons proportionally to allocated units
     let allocateCartons = 0;
@@ -2601,7 +2706,7 @@ async function submitBooking() {
       }
     }
 
-    const bookingId = (remainingUnits === (truckCount * unitWeight) && allocateUnits === (truckCount * unitWeight))
+    const bookingId = (remainingUnits === totalUnitsRequested && allocateUnits === totalUnitsRequested)
       ? groupId
       : `${groupId}-${createdIds.length + 1}`;
 
@@ -2676,9 +2781,8 @@ async function submitBooking() {
   document.getElementById('supDriver').value = '';
   // qty removed
   document.getElementById('supNotes').value = '';
-  document.getElementById('supType').value = '';
-  document.getElementById('supTruckType').value = '';
-  document.getElementById('supTruckCount').value = '1';
+  clearSelectedGoodsTypes();
+  resetTruckLines();
   document.getElementById('supCartons').value = '1';
   // palletLoading removed
   
@@ -3637,8 +3741,8 @@ document.getElementById('myBookingsTo').onchange = renderMyBookings;
 document.getElementById('myBookingsSupplier').oninput = renderMyBookings;
 document.getElementById('supCode').oninput = fillSupplierNameFromCode;
 document.getElementById('supNameSelect').onchange = onSupplierNameDropdownChange;
-document.getElementById('supTruckType').onchange = () => { enforceTruckCountLimit(true); checkCapacity(); };
-document.getElementById('supTruckCount').oninput = () => { enforceTruckCountLimit(true); checkCapacity(); };
+document.getElementById('supTruckType').onchange = () => { enforceTruckLineLimit(document.getElementById('supTruckType'), true); checkCapacity(); };
+document.getElementById('supTruckCount').oninput = () => { enforceTruckLineLimit(document.getElementById('supTruckCount'), true); checkCapacity(); };
 document.getElementById('bookingWarehouseSelect').onchange = () => { renderSupplierSlots(); checkCapacity(); };
 document.getElementById('exportAllBtn').onclick = exportAllReports;
 // Old report buttons were removed from UI; keep functions for backward-compat but don't bind.
@@ -3879,20 +3983,21 @@ function renderGoodsTypeCard() {
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
   let map = {};
   list.forEach(b => {
-    let key = (b.goodsType || '').trim() || '—';
-    if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
-    map[key].total += 1;
-    if (b.status === 'pending') map[key].pending += 1;
-    if (b.status === 'approved') map[key].approved += 1;
-    if (b.status === 'completed') map[key].completed += 1;
-    if (b.status === 'not_delivered') map[key].not_delivered += 1;
-    if (b.status === 'cancelled') map[key].cancelled += 1;
-    if (b.status === 'rejected') map[key].rejected += 1;
+    splitGoodsTypes(b.goodsType).forEach(key => {
+      if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+      map[key].total += 1;
+      if (b.status === 'pending') map[key].pending += 1;
+      if (b.status === 'approved') map[key].approved += 1;
+      if (b.status === 'completed') map[key].completed += 1;
+      if (b.status === 'not_delivered') map[key].not_delivered += 1;
+      if (b.status === 'cancelled') map[key].cancelled += 1;
+      if (b.status === 'rejected') map[key].rejected += 1;
+    });
   });
   let rows = Object.values(map).sort((a,b)=>b.total-a.total);
   let html = '';
   rows.slice(0, 30).forEach(x => {
-    const truckTotal = countUniqueTrucks(list.filter(b => ((b.goodsType||'').trim()||'—') === x.key), b => (b.goodsType||'').trim()||'—');
+    const truckTotal = countUniqueTrucks(list.filter(b => splitGoodsTypes(b.goodsType).includes(x.key)), b => splitGoodsTypes(b.goodsType).join('|'));
     html += `<tr><td>${x.key}</td><td>${truckTotal}</td><td>${x.total}</td><td>${x.pending}</td><td>${x.approved}</td><td>${x.completed}</td><td>${x.not_delivered}</td><td>${x.cancelled}</td><td>${x.rejected}</td></tr>`;
   });
   document.getElementById('rGoodsPreview').innerHTML = html || `<tr><td colspan="9" style="color:#999">لا يوجد بيانات</td></tr>`;
@@ -3905,19 +4010,20 @@ function exportGoodsTypeReport() {
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, '');
   let map = {};
   list.forEach(b => {
-    let key = (b.goodsType || '').trim() || '—';
-    if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
-    map[key].total += 1;
-    if (b.status === 'pending') map[key].pending += 1;
-    if (b.status === 'approved') map[key].approved += 1;
-    if (b.status === 'completed') map[key].completed += 1;
-    if (b.status === 'not_delivered') map[key].not_delivered += 1;
-    if (b.status === 'cancelled') map[key].cancelled += 1;
-    if (b.status === 'rejected') map[key].rejected += 1;
+    splitGoodsTypes(b.goodsType).forEach(key => {
+      if (!map[key]) map[key] = { key, total: 0, pending: 0, approved: 0, completed: 0, not_delivered: 0, cancelled: 0, rejected: 0 };
+      map[key].total += 1;
+      if (b.status === 'pending') map[key].pending += 1;
+      if (b.status === 'approved') map[key].approved += 1;
+      if (b.status === 'completed') map[key].completed += 1;
+      if (b.status === 'not_delivered') map[key].not_delivered += 1;
+      if (b.status === 'cancelled') map[key].cancelled += 1;
+      if (b.status === 'rejected') map[key].rejected += 1;
+    });
   });
   let out = [["نوع البضاعة","عدد العربيات","إجمالي الحجوزات","معلق","مؤكد","مكتمل","لم يتم التسليم","ملغي","مرفوض"]];
   Object.values(map).sort((a,b)=>b.total-a.total).forEach(x=>{
-    const truckTotal = countUniqueTrucks(list.filter(b => ((b.goodsType||'').trim()||'—') === x.key), b => (b.goodsType||'').trim()||'—');
+    const truckTotal = countUniqueTrucks(list.filter(b => splitGoodsTypes(b.goodsType).includes(x.key)), b => splitGoodsTypes(b.goodsType).join('|'));
     out.push([x.key, truckTotal, x.total, x.pending, x.approved, x.completed, x.not_delivered, x.cancelled, x.rejected]);
   });
   downloadExcel([{name:'تقرير نوع البضاعة', data: out}], 'تقرير_نوع_البضاعة.xlsx');
@@ -4121,6 +4227,9 @@ function statusLabel(s) {
 window.openBookingModal = openBookingModal;
 window.closeModal = closeModal;
 window.pickSlot = pickSlot;
+window.addTruckLine = addTruckLine;
+window.removeTruckLine = removeTruckLine;
+window.enforceTruckLineLimit = enforceTruckLineLimit;
 window.completeBooking = completeBooking;
 window.cancelBooking = cancelBooking;
 window.switchPage = switchPage;
