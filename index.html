@@ -1018,6 +1018,23 @@ function summarizeTruckLines(lines) {
   return (lines || []).map(x => `${x.type} × ${x.count}`).join('، ');
 }
 
+function unitsFromTruckTypeSummary(text) {
+  const s = String(text || '').trim();
+  if (!s) return 0;
+  let total = 0;
+  s.split(/،|,/).forEach(part => {
+    const p = part.trim();
+    if (!p) return;
+    const m = p.match(/^(.*?)\s*[×xX]\s*(\d+(?:\.\d+)?)$/);
+    if (m) {
+      const type = m[1].trim();
+      const count = parseFloat(m[2]) || 0;
+      total += count * truckUnitWeight(type);
+    }
+  });
+  return total;
+}
+
 function resetTruckLines() {
   const box = document.getElementById('truckLines');
   if (!box) return;
@@ -1362,9 +1379,16 @@ async function loadWarehouseDataFromApi() {
       return Number.isFinite(n) ? n : fallback;
     }
 
+    const loadedBookingIds = new Set();
     bookings.forEach(b => {
       const whId = b.warehouseId || b.warehouse || b.warehouseid;
       if (!whId || !warehouseData[whId]) return;
+      const rawId = String(b.id || '').trim();
+      if (rawId) {
+        const dedupeKey = `${whId}||${rawId}`;
+        if (loadedBookingIds.has(dedupeKey)) return;
+        loadedBookingIds.add(dedupeKey);
+      }
       const bookingObj = {
         id: b.id,
         groupId: b.groupId || b.groupid || '',
@@ -1865,11 +1889,21 @@ function getSlotBookedCount(whId, date, time) {
     b.status !== 'rejected' &&
     b.status !== 'cancelled'
   );
+  const seenBookingIds = new Set();
+  slotBookings = slotBookings.filter(b => {
+    const id = String(b.id || '').trim();
+    if (!id) return true;
+    if (seenBookingIds.has(id)) return false;
+    seenBookingIds.add(id);
+    return true;
+  });
   return slotBookings.reduce((sum, b) => {
     // If booking was split across slots by capacity-units, respect explicit unitsConsumed
     if (b.unitsConsumed !== undefined && b.unitsConsumed !== null && b.unitsConsumed !== '') {
       return sum + (parseFloat(b.unitsConsumed) || 0);
     }
+    const summaryUnits = unitsFromTruckTypeSummary(b.truckType);
+    if (summaryUnits > 0) return sum + summaryUnits;
     const count = parseFloat(b.truckCount) || 1;
     const weight = truckUnitWeight(b.truckType);
     return sum + (count * weight);
