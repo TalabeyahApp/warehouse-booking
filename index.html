@@ -233,7 +233,12 @@ body.boot-loading #loaderOverlay{display:flex !important}
 .sp-capacity.warning{color:var(--amber)}
 
 /* BOOKINGS TABLE */
-.table-wrap{overflow-x:auto;overflow-y:visible}
+ .table-wrap{overflow-x:auto;overflow-y:visible}
+.bookings-table-wrap{overflow:auto;max-height:calc(100vh - 230px);border:1px solid var(--border);border-radius:var(--r);background:var(--surface);scrollbar-gutter:stable}
+.bookings-table-wrap thead th{position:sticky;top:0;background:var(--surface);z-index:3;padding-top:10px}
+.bookings-table-wrap::-webkit-scrollbar{height:14px;width:12px}
+.bookings-table-wrap::-webkit-scrollbar-thumb{background:#b9b4aa;border-radius:10px;border:3px solid var(--surface)}
+.bookings-table-wrap::-webkit-scrollbar-track{background:#eeeae4;border-radius:10px}
 table{width:100%;border-collapse:collapse;font-size:12px}
 thead th{text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:0 10px 10px 0;border-bottom:1.5px solid var(--border);white-space:nowrap}
 tbody td{padding:10px 10px 10px 0;border-bottom:1px solid var(--paper);vertical-align:middle}
@@ -636,7 +641,7 @@ function closeSignupModal(){
     <input type="text" class="date-input" id="filterCreatedBy" placeholder="اسم اللي عمل الحجز" style="min-width:190px">
     <input type="text" class="date-input" id="filterSearch" placeholder="بحث..." style="flex:1">
   </div>
-  <div class="table-wrap"><table id="bookingsTable"><thead><tr id="bookingsHeaderRow"><th>رقم الحجز</th><th>رقم الجروب</th><th>رقم الدور</th><th>المخزن</th><th>المورد</th><th>رقم الأوردر</th><th>التاريخ</th><th>الوقت</th><th>نوع البضاعة</th><th>العربية</th><th>عدد العربيات</th><th>الكراتين</th><th>السيارة/السائق</th><th>وقت الوصول</th><th>وقت الدخول</th><th>وقت الخروج</th><th>الحالة</th><th>تاريخ الحالة</th><th>إجراء</th></tr></thead><tbody id="bookingsTbody"></tbody></table></div>
+  <div class="table-wrap bookings-table-wrap"><table id="bookingsTable"><thead><tr id="bookingsHeaderRow"><th>رقم الحجز</th><th>رقم الجروب</th><th>رقم الدور</th><th>المخزن</th><th>المورد</th><th>رقم الأوردر</th><th>التاريخ</th><th>الوقت</th><th>نوع البضاعة</th><th>العربية</th><th>عدد العربيات</th><th>الكراتين</th><th>السيارة/السائق</th><th>وقت الوصول</th><th>وقت الدخول</th><th>وقت الخروج</th><th>الحالة</th><th>تاريخ الحالة</th><th>إجراء</th></tr></thead><tbody id="bookingsTbody"></tbody></table></div>
 </div>
 
 <!-- REPORTS PAGE -->
@@ -1818,8 +1823,8 @@ function exportAllReports() {
   let whFilter = document.getElementById('reportsWarehouseFilter')?.value || '';
   // Bookings
   let bookingsList = getAllBookings(whFilter);
-  let bookingsRows = [["رقم الحجز","المخزن","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","التاريخ","الوقت","وقت الوصول","ملاحظات الامن","ملاحظات الاستلامات","الحالة"]];
-  bookingsList.forEach(b=>bookingsRows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', b.truckCount||'', b.cartons||'', formatDate(b.date), b.time, b.arrivalTime ? new Date(b.arrivalTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '', b['ملاحظات الامن'] || b.notes_single || '', b['ملاحظات الاستلامات'] || b.notes_single_view || '', statusLabel(b.status)]));
+  let bookingsRows = [["رقم الحجز","المخزن","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","التاريخ","الوقت","وقت الوصول","ملاحظات الامن","ملاحظات الاستلامات","وقت ملاحظات الاستلامات","عمل الحجز بواسطة","الحالة"]];
+  bookingsList.forEach(b=>bookingsRows.push([b.id, b.warehouseName, b.supplier, b.orderNum, b.goodsType, b.truckType||'', b.truckCount||'', b.cartons||'', formatDate(b.date), b.time, b.arrivalTime ? new Date(b.arrivalTime).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}) : '', b['ملاحظات الامن'] || b.notes_single || '', b['ملاحظات الاستلامات'] || b.notes_single_view || '', (b.receivingNotesUpdatedAt ? new Date(b.receivingNotesUpdatedAt).toLocaleString('ar-EG',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''), (b.createdBy || ''), statusLabel(b.status)]));
 
   // Supplier summary
   let supSummary = buildSupplierSummary(bookingsList);
@@ -4198,7 +4203,7 @@ function exportBookingsReport() {
   let toStr = document.getElementById('rTo').value;
   let status = document.getElementById('rBookingsStatus').value;
   let list = filterBookingsByRange(getAllBookings(whFilter), fromStr, toStr, status);
-  let rows = [["رقم الحجز","المخزن","التاريخ","الوقت","وقت الوصول","وقت الدخول","وقت الخروج","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","ملاحظات الامن","ملاحظات الاستلامات","الحالة"]];
+  let rows = [["رقم الحجز","المخزن","التاريخ","الوقت","وقت الوصول","وقت الدخول","وقت الخروج","المورد","رقم الأوردر","نوع البضاعة","نوع العربية","عدد العربيات","الكراتين","ملاحظات الامن","ملاحظات الاستلامات","وقت ملاحظات الاستلامات","عمل الحجز بواسطة","الحالة"]];
   list.forEach(b=>rows.push([
     b.id,
     b.warehouseName,
@@ -4215,6 +4220,8 @@ function exportBookingsReport() {
     b.cartons||'',
     b['ملاحظات الامن'] || b.notes_single || '',
     b['ملاحظات الاستلامات'] || b.notes_single_view || '',
+    b.receivingNotesUpdatedAt ? new Date(b.receivingNotesUpdatedAt).toLocaleString('ar-EG',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '',
+    b.createdBy || '',
     statusLabel(b.status)
   ]));
   downloadExcel([{name:'كل الحجوزات', data: rows}], 'كل_الحجوزات.xlsx');
