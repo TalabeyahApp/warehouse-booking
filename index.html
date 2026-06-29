@@ -1352,6 +1352,7 @@ async function loadWarehouseDataFromApi() {
 
     function normalizeDate(v) {
       if (!v) return '';
+      v = stripSheetTextPrefix(v);
       // Accept YYYY-MM-DD or ISO strings; return YYYY-MM-DD
       if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
       try {
@@ -1367,6 +1368,7 @@ async function loadWarehouseDataFromApi() {
 
     function normalizeTime(v) {
       if (!v) return '';
+      v = stripSheetTextPrefix(v);
       // Accept HH:MM
       if (typeof v === 'string' && /^\d{2}:\d{2}$/.test(v)) return v;
       // Excel time sometimes comes as Date ISO with 1899-12-30
@@ -1420,17 +1422,17 @@ async function loadWarehouseDataFromApi() {
         date: normalizeDate(b.date),
         time: normalizeTime(b.time),
         status: b.status || 'approved',
-        statusUpdatedAt: b.statusUpdatedAt || b.statusupdatedat || '',
+        statusUpdatedAt: stripSheetTextPrefix(b.statusUpdatedAt || b.statusupdatedat || ''),
         adminUnlocked: (String(b.adminUnlocked || b.adminunlocked || '').toLowerCase() === 'true') || (b.adminUnlocked === true) || (b.adminunlocked === true),
         notes: b.notes || '',
-        createdAt: b.createdAt || '',
+        createdAt: stripSheetTextPrefix(b.createdAt || ''),
         createdBy: b.createdBy || b.createdby || '',
-        createdTime: b.createdTime || b.createdtime || '',
-        arrivalTime: b.arrivalTime || b.arrivaltime || '',
-        checkInTime: b.checkInTime || '',
-        checkOutTime: b.checkOutTime || '',
-        cancelledAt: b.cancelledAt || '',
-        receivingNotesUpdatedAt: b.receivingNotesUpdatedAt || b.receivingnotesupdatedat || '',
+        createdTime: stripSheetTextPrefix(b.createdTime || b.createdtime || ''),
+        arrivalTime: stripSheetTextPrefix(b.arrivalTime || b.arrivaltime || ''),
+        checkInTime: stripSheetTextPrefix(b.checkInTime || ''),
+        checkOutTime: stripSheetTextPrefix(b.checkOutTime || ''),
+        cancelledAt: stripSheetTextPrefix(b.cancelledAt || ''),
+        receivingNotesUpdatedAt: stripSheetTextPrefix(b.receivingNotesUpdatedAt || b.receivingnotesupdatedat || ''),
         receivingNotesUpdatedBy: b.receivingNotesUpdatedBy || b.receivingnotesupdatedby || '',
       };
       Object.keys(b || {}).forEach(k => {
@@ -1596,6 +1598,37 @@ function saveWarehouseData(whId) {
 
 const PENDING_BOOKING_SYNC_KEY = 'pendingBookingSync';
 
+function stripSheetTextPrefix(v) {
+  return String(v || '').replace(/^'/, '').trim();
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function formatDateTimeForSheet(v) {
+  if (!v) return '';
+  const raw = stripSheetTextPrefix(v);
+  // Keep already-readable text if it is not parseable as a Date.
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw ? ("'" + raw) : '';
+  const yyyy = d.getFullYear();
+  const mm = pad2(d.getMonth() + 1);
+  const dd = pad2(d.getDate());
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  const ss = pad2(d.getSeconds());
+  return `'${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+}
+
+function formatTimeForSheet(v) {
+  if (!v) return '';
+  const raw = stripSheetTextPrefix(v);
+  const m = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (m) return `'${pad2(m[1])}:${m[2]}`;
+  const d = new Date(raw);
+  if (!isNaN(d.getTime())) return `'${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return raw ? ("'" + raw) : '';
+}
+
 function bookingApiPayload(whId, booking) {
   const dateStr = (booking.date || '').trim();
   const timeStr = (booking.time || '').trim();
@@ -1620,17 +1653,17 @@ function bookingApiPayload(whId, booking) {
     date: sheetDate,
     time: sheetTime,
     status: booking.status || '',
-    statusUpdatedAt: booking.statusUpdatedAt || '',
+    statusUpdatedAt: formatDateTimeForSheet(booking.statusUpdatedAt),
     adminUnlocked: booking.adminUnlocked ? true : false,
-    createdAt: booking.createdAt || '',
+    createdAt: formatDateTimeForSheet(booking.createdAt),
     createdBy: booking.createdBy || '',
-    createdTime: booking.createdTime || '',
-    arrivalTime: booking.arrivalTime || '',
-    checkInTime: booking.checkInTime || '',
-    checkOutTime: booking.checkOutTime || '',
-    cancelledAt: booking.cancelledAt || '',
+    createdTime: formatTimeForSheet(booking.createdTime),
+    arrivalTime: formatDateTimeForSheet(booking.arrivalTime),
+    checkInTime: formatDateTimeForSheet(booking.checkInTime),
+    checkOutTime: formatDateTimeForSheet(booking.checkOutTime),
+    cancelledAt: formatDateTimeForSheet(booking.cancelledAt),
     notes: booking.notes || '',
-    receivingNotesUpdatedAt: booking.receivingNotesUpdatedAt || '',
+    receivingNotesUpdatedAt: formatDateTimeForSheet(booking.receivingNotesUpdatedAt),
     receivingNotesUpdatedBy: booking.receivingNotesUpdatedBy || '',
   };
   Object.keys(booking || {}).forEach(k => {
