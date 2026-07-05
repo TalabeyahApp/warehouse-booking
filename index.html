@@ -501,6 +501,7 @@ function closeSignupModal(){
     <span class="today-badge" id="todayBadge"></span>
   </div>
   <div class="stats-row" id="whStats"></div>
+  <div id="slotAdminTools"></div>
   <div class="slot-grid" id="whSlotGrid"></div>
 </div>
 
@@ -843,36 +844,73 @@ async function isInsideWarehouseGeofence(warehouseId) {
   return { ok: true, allowed: dist <= ARRIVAL_GEOFENCE_METERS, distanceMeters: dist };
 }
 
-const SLOTS_PER_DAY = [
-  '09:00','13:00'
+const DEFAULT_SLOT_DEFINITIONS = [
+  { startTime: '09:00', endTime: '13:00', capacity: 25 },
+  { startTime: '13:00', endTime: '16:00', capacity: 25 },
 ];
+// Backward-compatible fallback; dynamic screens should use getSlotTimes(whId,date).
+const SLOTS_PER_DAY = DEFAULT_SLOT_DEFINITIONS.map(s => s.startTime);
+let slotDefinitions = {}; // key: warehouseId|date => [{startTime,endTime,capacity}]
+
+function slotDefsKey(whId, date) { return `${whId}`; }
+function normalizeSlotTime(v) {
+  const m = String(v || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return '';
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isInteger(h) || !Number.isInteger(min) || h < 0 || h > 23 || min < 0 || min > 59) return '';
+  return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+}
+function slotMinutes(t) {
+  const n = normalizeSlotTime(t);
+  if (!n) return NaN;
+  const [h,m] = n.split(':').map(Number);
+  return h * 60 + m;
+}
+function normalizeSlotDefinitions(list) {
+  return (list || [])
+    .map(x => ({
+      startTime: normalizeSlotTime(x.startTime || x.start || x.time),
+      endTime: normalizeSlotTime(x.endTime || x.end || x.to),
+      capacity: Math.max(0, Math.floor(Number(x.capacity ?? x.cap ?? 25) || 0)),
+    }))
+    .filter(x => x.startTime && x.endTime && slotMinutes(x.startTime) < slotMinutes(x.endTime))
+    .sort((a,b) => slotMinutes(a.startTime) - slotMinutes(b.startTime));
+}
+function getSlotDefinitions(whId, date) {
+  const key = slotDefsKey(whId, date);
+  const hasCustom = Object.prototype.hasOwnProperty.call(slotDefinitions, key);
+  const custom = slotDefinitions[key];
+  const list = hasCustom ? (custom || []) : DEFAULT_SLOT_DEFINITIONS;
+  return normalizeSlotDefinitions(list);
+}
+function getSlotTimes(whId, date) { return getSlotDefinitions(whId, date).map(s => s.startTime); }
+function getSlotDefinition(whId, date, time) {
+  const t = normalizeSlotTime(time);
+  return getSlotDefinitions(whId, date).find(s => s.startTime === t) || null;
+}
 
 // Slot capacity defaults
 // Admin can override capacity per (warehouse,date,time)
-function baseSlotCapacity(time) {
-  // 09:00-13:00 => 25 cars
-  // 13:00-16:00 => 25 cars
-  return 25;
+function baseSlotCapacity(time, whId, date) {
+  const def = getSlotDefinition(whId, date, time);
+  return def ? def.capacity : 25;
 }
 
-function slotEndTime(time) {
-  if (time === '09:00') return '13:00';
-  if (time === '13:00') return '16:00';
-  return time;
+function slotEndTime(time, whId, date) {
+  const def = getSlotDefinition(whId, date, time);
+  return def ? def.endTime : time;
 }
 
-function slotDisplayLabel(time) {
-  const end = slotEndTime(time);
+function slotDisplayLabel(time, whId, date) {
+  const end = slotEndTime(time, whId, date);
   return end && end !== time ? `${time} - ${end}` : time;
 }
 
 function slotCapacity(whId, date, time) {
-  const ds = warehouseData?.[whId];
-  const key = getSlotKey(date, time);
-  const ov = ds?.slotCapacityOverrides?.[key];
-  const n = (ov === '' || ov === null || ov === undefined) ? null : Number(ov);
-  if (Number.isFinite(n) && n >= 0) return n;
-  return baseSlotCapacity(time);
+  // Slot count/capacity is now absolute per warehouse via SlotDefinitions.
+  // Legacy per-day capacity overrides are ignored to keep the admin setting global.
+  return baseSlotCapacity(time, whId, date);
 }
 
 function fmtCap(n) {
@@ -1340,8 +1378,14 @@ async function loadWarehouseDataFromApi() {
     // Load slot capacity overrides (shared across devices)
     const capRes = await apiGet('listSlotCapacityOverrides');
     const caps = (capRes && capRes.ok && Array.isArray(capRes.data)) ? capRes.data : [];
+    let slots = [];
+    try {
+      const slotRes = await apiGet('listSlotDefinitions');
+      slots = (slotRes && slotRes.ok && Array.isArray(slotRes.data)) ? slotRes.data : [];
+    } catch(e) { slots = []; }
 
     // Ensure base structure
+    slotDefinitions = {};
     for (let whId in WAREHOUSES) {
       warehouseData[whId] = warehouseData[whId] || { bookings: [], blockedSlots: [], slotCapacityOverrides: {} };
       warehouseData[whId].bookings = [];
@@ -1448,6 +1492,22 @@ async function loadWarehouseDataFromApi() {
       if (!whId || !warehouseData[whId] || !date || !time) return;
       warehouseData[whId].blockedSlots.push(getSlotKey(date, time));
     });
+
+    // custom slot definitions (absolute per warehouse)
+    (slots || []).forEach(x => {
+      const whId = x.warehouseId || x.warehouse || x.warehouseid;
+      const rawId = String(x.id || '').trim();
+      if (rawId.split('|').length >= 3) return; // legacy per-day slot rows are ignored
+      const startTime = normalizeTime(x.startTime || x.starttime || x.start || x.time);
+      const endTime = normalizeTime(x.endTime || x.endtime || x.end || x.to);
+      const activeVal = String(x.active ?? x.isActive ?? 'true').toLowerCase();
+      const capacity = Number(x.capacity ?? 25);
+      if (!whId || !WAREHOUSES[whId] || !startTime || !endTime || activeVal === 'false') return;
+      const key = slotDefsKey(whId);
+      slotDefinitions[key] = slotDefinitions[key] || [];
+      slotDefinitions[key].push({ startTime, endTime, capacity: Number.isFinite(capacity) ? Math.max(0, Math.floor(capacity)) : 25 });
+    });
+    Object.keys(slotDefinitions).forEach(k => slotDefinitions[k] = normalizeSlotDefinitions(slotDefinitions[k]));
 
     // capacity overrides (prefer parsing from id to avoid time/date coercion)
     (caps || []).forEach(x => {
@@ -1786,9 +1846,9 @@ function padNum(n, len) {
   return s;
 }
 
-function slotLetter(slotTime) {
+function slotLetter(slotTime, whId, date) {
   // A,B,C... based on slot position in the day
-  const idx = SLOTS_PER_DAY.indexOf(slotTime);
+  const idx = getSlotTimes(whId, date).indexOf(slotTime);
   if (idx < 0) return '';
   return String.fromCharCode(65 + idx); // 65='A'
 }
@@ -1875,17 +1935,17 @@ function exportAllReports() {
   let whIds = whFilter ? [whFilter] : Object.keys(WAREHOUSES);
   whIds.forEach(whId=>{
     let whName = WAREHOUSES[whId].name;
-    SLOTS_PER_DAY.forEach(time=>{
+    getSlotTimes(whId, dailyDate).forEach(time=>{
       if (isBlocked(whId, dailyDate, time)) {
-        dailyRows.push([whName, formatDate(dailyDate), time, 'مغلق', '', '', '']);
+        dailyRows.push([whName, formatDate(dailyDate), slotDisplayLabel(time, whId, dailyDate), 'مغلق', '', '', '']);
         return;
       }
       let slotBookings = (warehouseData[whId]?.bookings || []).filter(b => b.date === dailyDate && b.time === time);
       if (slotBookings.length) {
         let b = slotBookings[0];
-        dailyRows.push([whName, formatDate(dailyDate), time, statusLabel(b.status), b.supplier||'', b.orderNum||'', (b.plate||'') + (b.driver?(' / '+b.driver):'')]);
+        dailyRows.push([whName, formatDate(dailyDate), slotDisplayLabel(time, whId, dailyDate), statusLabel(b.status), b.supplier||'', b.orderNum||'', (b.plate||'') + (b.driver?(' / '+b.driver):'')]);
       } else {
-        dailyRows.push([whName, formatDate(dailyDate), time, 'متاح', '', '', '']);
+        dailyRows.push([whName, formatDate(dailyDate), slotDisplayLabel(time, whId, dailyDate), 'متاح', '', '', '']);
       }
     })
   });
@@ -2069,7 +2129,7 @@ function renderWarehouse() {
   // Unique suppliers count (no duplicates)
   let uniqueSuppliers = new Set(dayBookings.map(b => (b.supplier||'').trim()).filter(Boolean));
   
-  let totalCapacity = SLOTS_PER_DAY.reduce((sum, t) => sum + slotCapacity(whId, date, t), 0);
+  let totalCapacity = getSlotTimes(whId, date).reduce((sum, t) => sum + slotCapacity(whId, date, t), 0);
   // Show booked as actual trucks (can be fractional)
   let bookedTrucks = dayBookings.reduce((sum, b) => sum + (parseFloat(b.truckCount) || 0), 0);
   let blocked = whData.blockedSlots.filter(k => k.startsWith(date+'|')).length;
@@ -2082,14 +2142,14 @@ function renderWarehouse() {
   // Available capacity is still computed in capacity-units
   let bookedUnits = dayBookings.reduce((sum, b) => sum + (getSlotBookedCount(whId, b.date, b.time) ? 0 : 0), 0);
   // We already compute per-slot elsewhere; keep day-level capacity as units by recomputing per slot
-  let usedUnits = SLOTS_PER_DAY.reduce((sum, t) => sum + getSlotBookedCount(whId, date, t), 0);
+  let usedUnits = getSlotTimes(whId, date).reduce((sum, t) => sum + getSlotBookedCount(whId, date, t), 0);
   let availableCapacity = totalCapacity - usedUnits - blockedCapacity;
   if (availableCapacity < 0) availableCapacity = 0;
 
   // Slot KPIs: completed slots (full) and remaining slots (available)
   let completedSlots = 0;
   let remainingSlots = 0;
-  SLOTS_PER_DAY.forEach(time => {
+  getSlotTimes(whId, date).forEach(time => {
     if (isBlocked(whId, date, time) || isPastSlot(date, time)) return;
     let used = getSlotBookedCount(whId, date, time);
     let cap = slotCapacity(whId, date, time);
@@ -2106,9 +2166,10 @@ function renderWarehouse() {
     <div class="stat-card"><div class="stat-label">Slots مغلقة</div><div class="stat-val">${blocked}</div></div>
     <div class="stat-card"><div class="stat-label">إجمالي الحجوزات</div><div class="stat-val">${dayBookings.length}</div></div>
   `;
+  renderSlotAdminTools(whId, date);
 
   let grid = document.getElementById('whSlotGrid');
-  grid.innerHTML = SLOTS_PER_DAY.map(time => {
+  grid.innerHTML = getSlotTimes(whId, date).map(time => {
     let st = slotStatus(whId, date, time);
     let bookedCount = getSlotBookedCount(whId, date, time);
     let cap = slotCapacity(whId, date, time);
@@ -2134,15 +2195,17 @@ function renderWarehouse() {
     let capacityClass = available > 0 ? (available <= 1 ? 'capacity-warning' : '') : 'capacity-full';
     let capacityText = available > 0 ? (available <= 1 ? `⚠️ متبقي: ${fmtCap(available)} عربية فقط` : `متاح: ${fmtCap(available)} عربية`) : 'مكتمل';
     let clickFn = (st === 'available' || st === 'warning') ? `onclick="toggleBlock('${date}','${time}')"` : '';
-    let adminEditBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-details" type="button" onclick="editSlotCapacity('${date}','${time}')">تعديل عدد السلوت</button>` : '';
+    let adminEditBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-details" type="button" onclick="editSlotCapacity('${date}','${time}')">تعديل العدد</button>` : '';
+    let adminTimeBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-details" type="button" onclick="editSlotDefinition('${date}','${time}')">تعديل الوقت</button>` : '';
+    let adminDeleteBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-cancel" type="button" onclick="deleteSlotDefinition('${date}','${time}')">حذف</button>` : '';
     let adminBlockBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-details" type="button" onclick="toggleBlock('${date}','${time}')">${st === 'blocked' ? 'فتح' : 'قفل'}</button>` : '';
 
     return `<div class="slot-card ${st === 'warning' ? 'available' : st}" ${currentWarehouseAccess === 'all' ? '' : ''}>
-      <div class="slot-time">${slotDisplayLabel(time)}</div>
+      <div class="slot-time">${slotDisplayLabel(time, whId, date)}</div>
       <div class="slot-status">${label}</div>
       <div class="slot-capacity ${capacityClass}">🚛 ${capacityText}</div>
       ${info}
-      ${currentWarehouseAccess === 'all' ? `<div class="action-btns" style="justify-content:center;margin-top:10px">${adminBlockBtn}${adminEditBtn}</div>` : ''}
+      ${currentWarehouseAccess === 'all' ? `<div class="action-btns" style="justify-content:center;margin-top:10px">${adminBlockBtn}${adminEditBtn}${adminTimeBtn}${adminDeleteBtn}</div>` : ''}
     </div>`;
   }).join('');
   
@@ -2174,6 +2237,161 @@ function changeBookingsDay(delta) {
   renderBookingsTable();
 }
 
+function renderSlotAdminTools(whId, date) {
+  const el = document.getElementById('slotAdminTools');
+  if (!el) return;
+  if (currentWarehouseAccess !== 'all') { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="panel" style="margin-bottom:14px;padding:14px">
+    <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+      <div><strong>إدارة مواعيد السلوت</strong><div style="font-size:12px;color:var(--muted)">تعديل بداية/نهاية السلوت أو إضافة/حذف سلوت للمخزن المختار بالكامل</div></div>
+      <div class="action-btns"><button class="btn-sm btn-complete" type="button" onclick="addSlotDefinition()">+ إضافة سلوت</button></div>
+    </div>
+  </div>`;
+}
+
+function hasSlotOverlap(list, startTime, endTime, oldStartTime = '') {
+  const s1 = slotMinutes(startTime), e1 = slotMinutes(endTime);
+  return (list || []).some(x => {
+    if (oldStartTime && x.startTime === oldStartTime) return false;
+    const s2 = slotMinutes(x.startTime), e2 = slotMinutes(x.endTime);
+    return s1 < e2 && s2 < e1;
+  });
+}
+
+function validateSlotInputs(startTime, endTime, capacity, list, oldStartTime = '') {
+  const st = normalizeSlotTime(startTime);
+  const en = normalizeSlotTime(endTime);
+  const cap = Number(capacity);
+  if (!st || !en) return { ok:false, error:'اكتب الوقت بصيغة HH:MM مثل 09:00' };
+  if (slotMinutes(st) >= slotMinutes(en)) return { ok:false, error:'وقت النهاية لازم يكون بعد وقت البداية' };
+  if (!Number.isFinite(cap) || !Number.isInteger(cap) || cap < 0) return { ok:false, error:'عدد العربيات لازم يكون رقم صحيح 0 أو أكثر' };
+  if (hasSlotOverlap(list, st, en, oldStartTime)) return { ok:false, error:'ميعاد السلوت متداخل مع سلوت آخر' };
+  return { ok:true, startTime: st, endTime: en, capacity: cap };
+}
+
+async function persistSlotDefinitionsForWarehouse(whId, list, deletedStarts = []) {
+  const normalized = normalizeSlotDefinitions(list);
+  slotDefinitions[slotDefsKey(whId)] = normalized;
+  try {
+    showLoader('جاري الحفظ...');
+    for (const oldStart of deletedStarts) {
+      await apiGet('deleteSlotDefinition', { id: `${whId}|${oldStart}` });
+    }
+    for (const sl of normalized) {
+      await apiGet('upsertSlotDefinition', {
+        id: `${whId}|${sl.startTime}`,
+        warehouseId: whId,
+        date: '',
+        startTime: sl.startTime,
+        endTime: sl.endTime,
+        capacity: sl.capacity,
+        active: true,
+        updatedAt: nowIso(),
+      });
+    }
+  } catch(e) {
+    console.error(e);
+    alert('⚠️ لم يتم حفظ تعديل السلوت. تأكد من تحديث Apps Script وإضافة تاب SlotDefinitions');
+  } finally {
+    try { hideLoader(); } catch(_) {}
+  }
+}
+
+async function addSlotDefinition() {
+  if (currentWarehouseAccess !== 'all') { alert('غير مسموح: هذا الإجراء للادمن فقط'); return; }
+  const whId = currentWarehouse;
+  const list = getSlotDefinitions(whId).map(x => ({...x}));
+  const startTime = prompt('وقت بداية السلوت الجديد (مثال 16:00)');
+  if (startTime === null) return;
+  const endTime = prompt('وقت نهاية السلوت الجديد (مثال 18:00)');
+  if (endTime === null) return;
+  const capacity = prompt('عدد العربيات في السلوت', '25');
+  if (capacity === null) return;
+  const v = validateSlotInputs(startTime, endTime, capacity, list);
+  if (!v.ok) { alert('⚠️ ' + v.error); return; }
+  list.push({ startTime: v.startTime, endTime: v.endTime, capacity: v.capacity });
+  await persistSlotDefinitionsForWarehouse(whId, list, []);
+  renderWarehouse();
+  renderSupplierSlots();
+}
+
+async function editSlotDefinition(date, oldTime) {
+  if (currentWarehouseAccess !== 'all') { alert('غير مسموح: هذا الإجراء للادمن فقط'); return; }
+  const whId = currentWarehouse;
+  const list = getSlotDefinitions(whId).map(x => ({...x}));
+  const idx = list.findIndex(x => x.startTime === oldTime);
+  if (idx < 0) return;
+  const cur = list[idx];
+  const startTime = prompt('وقت بداية السلوت', cur.startTime);
+  if (startTime === null) return;
+  const endTime = prompt('وقت نهاية السلوت', cur.endTime);
+  if (endTime === null) return;
+  const capacity = prompt('عدد العربيات في السلوت', String(slotCapacity(whId, date, oldTime)));
+  if (capacity === null) return;
+  const v = validateSlotInputs(startTime, endTime, capacity, list, cur.startTime);
+  if (!v.ok) { alert('⚠️ ' + v.error); return; }
+
+  const bookingsInSlot = (warehouseData[whId]?.bookings || []).filter(b => b.date === date && b.time === oldTime && b.status !== 'cancelled' && b.status !== 'rejected');
+  if (oldTime !== v.startTime && bookingsInSlot.length) {
+    if (!confirm(`يوجد ${bookingsInSlot.length} حجز على هذا السلوت. هل تريد نقلهم للوقت الجديد؟`)) return;
+  }
+
+  list[idx] = { startTime: v.startTime, endTime: v.endTime, capacity: v.capacity };
+  const deleted = oldTime !== v.startTime ? [oldTime] : [];
+  // Clear old capacity overrides so this slot definition's capacity is the source of truth.
+  warehouseData[whId].slotCapacityOverrides = warehouseData[whId].slotCapacityOverrides || {};
+  delete warehouseData[whId].slotCapacityOverrides[getSlotKey(date, oldTime)];
+  delete warehouseData[whId].slotCapacityOverrides[getSlotKey(date, v.startTime)];
+  apiGet('deleteSlotCapacityOverride', { id: `${whId}|${date}|${oldTime}` }).catch(()=>{});
+  if (oldTime !== v.startTime) apiGet('deleteSlotCapacityOverride', { id: `${whId}|${date}|${v.startTime}` }).catch(()=>{});
+
+  // Move existing bookings/blocked/capacity keys if start time changed.
+  if (oldTime !== v.startTime) {
+    (warehouseData[whId]?.bookings || []).forEach(b => {
+      if (b.date === date && b.time === oldTime) {
+        b.time = v.startTime;
+        upsertBookingToApi(whId, b);
+      }
+    });
+    const oldKey = getSlotKey(date, oldTime);
+    const newKey = getSlotKey(date, v.startTime);
+    const bi = warehouseData[whId].blockedSlots.indexOf(oldKey);
+    if (bi >= 0) {
+      warehouseData[whId].blockedSlots[bi] = newKey;
+      apiGet('deleteBlockedSlot', { id: `${whId}|${date}|${oldTime}` }).catch(()=>{});
+      upsertBlockedSlotToApi(whId, date, v.startTime, true);
+    }
+  }
+
+  saveWarehouseData(whId);
+  await persistSlotDefinitionsForWarehouse(whId, list, deleted);
+  renderWarehouse();
+  renderBookingsTable();
+  renderSupplierSlots();
+}
+
+async function deleteSlotDefinition(date, time) {
+  if (currentWarehouseAccess !== 'all') { alert('غير مسموح: هذا الإجراء للادمن فقط'); return; }
+  const whId = currentWarehouse;
+  const currentList = getSlotDefinitions(whId);
+  if (currentList.length <= 1) { alert('لا يمكن حذف آخر سلوت في اليوم. عدّل وقته أو عدده بدل الحذف.'); return; }
+  const bookingsInSlot = (warehouseData[whId]?.bookings || []).filter(b => b.date === date && b.time === time && b.status !== 'cancelled' && b.status !== 'rejected');
+  if (bookingsInSlot.length) {
+    alert(`لا يمكن حذف السلوت لأن عليه ${bookingsInSlot.length} حجز. انقل/الغِ الحجوزات الأول.`);
+    return;
+  }
+  if (!confirm(`هل تريد حذف السلوت ${slotDisplayLabel(time, whId, date)}؟`)) return;
+  const list = getSlotDefinitions(whId).filter(x => x.startTime !== time);
+  const key = getSlotKey(date, time);
+  warehouseData[whId].blockedSlots = (warehouseData[whId].blockedSlots || []).filter(k => k !== key);
+  apiGet('deleteBlockedSlot', { id: `${whId}|${date}|${time}` }).catch(()=>{});
+  if (warehouseData[whId].slotCapacityOverrides) delete warehouseData[whId].slotCapacityOverrides[key];
+  saveWarehouseData(whId);
+  await persistSlotDefinitionsForWarehouse(whId, list, [time]);
+  renderWarehouse();
+  renderSupplierSlots();
+}
+
 function toggleBlock(date, time) {
   if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let whId = currentWarehouse;
@@ -2194,7 +2412,8 @@ function toggleBlock(date, time) {
   }
   saveWarehouseData(whId);
   // Sync shared data
-  upsertBlockedSlotToApi(whId, date, time, isBlockedNow);
+  if (isBlockedNow) upsertBlockedSlotToApi(whId, date, time, true);
+  else apiGet('deleteBlockedSlot', { id: `${whId}|${date}|${time}` }).catch(()=>{});
   renderWarehouse();
 }
 
@@ -2205,48 +2424,23 @@ function editSlotCapacity(date, time) {
     alert('غير مسموح: هذا الإجراء للادمن فقط');
     return;
   }
-  const key = getSlotKey(date, time);
-  warehouseData[whId].slotCapacityOverrides = warehouseData[whId].slotCapacityOverrides || {};
-  const current = warehouseData[whId].slotCapacityOverrides[key];
-  const base = baseSlotCapacity(time);
-  let v = prompt(`تعديل عدد السلوت (${slotDisplayLabel(time)})\nالقيمة الافتراضية: ${base} عربية\nاتركه فارغ لإزالة التعديل`, (current === undefined ? '' : String(current)));
+  const list = getSlotDefinitions(whId).map(x => ({...x}));
+  const idx = list.findIndex(x => x.startTime === time);
+  if (idx < 0) return;
+  const current = list[idx].capacity;
+  let v = prompt(`تعديل عدد العربيات في السلوت (${slotDisplayLabel(time, whId, date)})\nالتعديل سيطبق على هذا المخزن بالكامل`, String(current));
   if (v === null) return;
   v = String(v).trim();
-  if (!v) {
-    delete warehouseData[whId].slotCapacityOverrides[key];
-    saveWarehouseData(whId);
-    // Sync delete to remote storage so all users fall back to default capacity
-    try {
-      showLoader('جاري التحميل...');
-      apiGet('deleteSlotCapacityOverride', { id: `${whId}|${date}|${time}` })
-        .then(() => refreshDataWithLoaderSafe().then(() => renderWarehouse()))
-        .finally(() => hideLoader());
-    } catch(e) {}
-    renderWarehouse();
-    return;
-  }
   const n = Number(v);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
     alert('⚠️ أدخل رقم صحيح بدون كسور (0 أو أكثر)');
     return;
   }
-  warehouseData[whId].slotCapacityOverrides[key] = n;
-  saveWarehouseData(whId);
-  // Sync to shared storage
-  try {
-    showLoader('جاري التحميل...');
-    apiGet('upsertSlotCapacityOverride', {
-      id: `${whId}|${date}|${time}`,
-      warehouseId: whId,
-      date,
-      time,
-      capacity: n,
-      updatedAt: nowIso(),
-    })
-      .then(() => refreshDataWithLoaderSafe().then(() => renderWarehouse()))
-      .finally(() => hideLoader());
-  } catch(e) {}
-  renderWarehouse();
+  list[idx].capacity = n;
+  persistSlotDefinitionsForWarehouse(whId, list, []).then(() => {
+    renderWarehouse();
+    renderSupplierSlots();
+  });
 }
 
 function cancelBooking(whId, id) {
@@ -2327,7 +2521,7 @@ function renderSupplierSlots() {
 
   let grid = document.getElementById('supplierSlots');
   const supplierAdminCanUsePastSlots = isSupplierAdminUser(currentSupplierData);
-  grid.innerHTML = SLOTS_PER_DAY.map(time => {
+  grid.innerHTML = getSlotTimes(whId, date).map(time => {
     let st = slotStatus(whId, date, time);
     let bookedCount = getSlotBookedCount(whId, date, time);
     let available = slotCapacity(whId, date, time) - bookedCount;
@@ -2367,7 +2561,7 @@ function renderSupplierSlots() {
 
     let onclickAttr = (!taken && st !== 'full') ? `onclick="pickSlot(this,'${time}')"` : '';
     return `<div class="slot-pick ${taken?'taken':''} ${extraClass}" data-time="${time}" ${onclickAttr}>
-      <div class="sp-time">${slotDisplayLabel(time)}</div>
+      <div class="sp-time">${slotDisplayLabel(time, whId, date)}</div>
       <div class="sp-cap">${cap}</div>
       <div class="sp-capacity ${extraClass}">🚛 سعة ${slotCapacity(whId, date, time)}</div>
     </div>`;
@@ -2424,7 +2618,7 @@ function renderMyBookings() {
     let whName = WAREHOUSES[parts[0].warehouseId]?.name || '';
     let date = parts[0].date;
     let timeRange = parts.map(p=>p.time).filter(Boolean);
-    let timeLabel = timeRange.length ? (slotDisplayLabel(timeRange[0]) + (timeRange.length>1 ? ' +'+(timeRange.length-1) : '')) : '-';
+    let timeLabel = timeRange.length ? (slotDisplayLabel(timeRange[0], whId, date) + (timeRange.length>1 ? ' +'+(timeRange.length-1) : '')) : '-';
     let trucks = parts.reduce((s,p)=>s + (parseFloat(p.truckCount)||0), 0);
     let cartons = parts.reduce((s,p)=>s + (parseInt(p.cartons)||0), 0);
     let status = parts.some(p=>p.status==='cancelled') ? 'cancelled' : (parts.some(p=>p.status==='not_delivered') ? 'not_delivered' : (parts.some(p=>p.status==='completed') ? 'completed' : (parts.some(p=>p.status==='approved') ? 'approved' : (parts[0].status||''))));
@@ -2750,7 +2944,8 @@ async function submitBooking() {
   if (!isSupplierAdminUser(currentSupplierData) && isPastSlot(date, selectedSlot)) { showAlert('bookAlert', 'هذا الموعد انتهى وقته', 'error'); return; }
 
   // Build slot sequence starting from selectedSlot
-  const startIdx = SLOTS_PER_DAY.indexOf(selectedSlot);
+  const slotSeq = getSlotTimes(whId, date);
+  const startIdx = slotSeq.indexOf(selectedSlot);
   if (startIdx < 0) { showAlert('bookAlert', 'الوقت المختار غير صحيح', 'error'); return; }
 
   let remainingUnits = totalUnitsRequested;
@@ -2774,12 +2969,12 @@ async function submitBooking() {
       if (Number.isFinite(q) && q > maxQ) maxQ = q;
     });
     let n = maxQ + 1;
-    let letter = slotLetter(slotTime);
+    let letter = slotLetter(slotTime, whId, date);
     return letter ? `${n} ${letter}` : String(n);
   }
 
-  for (let i = startIdx; i < SLOTS_PER_DAY.length && remainingUnits > 0; i++) {
-    const slotTime = SLOTS_PER_DAY[i];
+  for (let i = startIdx; i < slotSeq.length && remainingUnits > 0; i++) {
+    const slotTime = slotSeq[i];
     // Skip blocked/past
     if (!isSupplierAdminUser(currentSupplierData) && isPastSlot(date, slotTime)) continue;
     if (isBlocked(whId, date, slotTime)) continue;
@@ -3031,7 +3226,7 @@ function renderBookingsTable() {
     <td>${b.supplier}</td>
     <td>${b.orderNum}</td>
     <td>${formatDate(b.date)}</td>
-    <td>${slotDisplayLabel(b.time)}</td>
+    <td>${slotDisplayLabel(b.time, b.warehouseId || b.warehouse, b.date)}</td>
     <td>${b.goodsType}</td>
     <td>${b.truckType||'-'}</td>
     <td>${b.truckCount||'-'}</td>
@@ -3161,7 +3356,7 @@ function openBookingModal(whId, id) {
     <div class="info-row"><span class="info-key">المخزن</span><span class="info-val">${WAREHOUSES[whId].name}</span></div>
     <div class="info-row"><span class="info-key">المورد</span><span class="info-val">${b.supplier}</span></div>
     <div class="info-row"><span class="info-key">رقم الأوردر</span><span class="info-val">${b.orderNum}</span></div>
-    <div class="info-row"><span class="info-key">التاريخ والوقت</span><span class="info-val">${formatDate(b.date)} ${slotDisplayLabel(b.time)}</span></div>
+    <div class="info-row"><span class="info-key">التاريخ والوقت</span><span class="info-val">${formatDate(b.date)} ${slotDisplayLabel(b.time, b.warehouseId || b.warehouse, b.date)}</span></div>
     <div class="info-row"><span class="info-key">نوع البضاعة</span><span class="info-val">${b.goodsType}</span></div>
     <div class="info-row"><span class="info-key">نوع العربية</span><span class="info-val">${b.truckType||'-'}</span></div>
     <div class="info-row"><span class="info-key">عدد العربيات</span><span class="info-val">${b.truckCount||'-'}</span></div>
@@ -3950,7 +4145,7 @@ function renderDailyScheduleCard() {
   let rows = [];
   let kBlocked = 0, kAvailable = 0, kWaiting = 0, kBooked = 0;
   whIds.forEach(whId => {
-    SLOTS_PER_DAY.forEach(time => {
+    getSlotTimes(whId, date).forEach(time => {
       let blocked = isBlocked(whId, date, time);
       if (blocked) { kBlocked++; rows.push({ time, status: 'مغلق', supplier: '', orderNum: '', vehicle: '', whId }); return; }
       // find bookings for this slot
@@ -4038,7 +4233,7 @@ function renderUtilizationCard() {
     let bookedSlots = 0, blockedSlots = 0;
     let totalSlots = 0;
     whIds.forEach(whId => {
-      SLOTS_PER_DAY.forEach(time => {
+      getSlotTimes(whId, date).forEach(time => {
         totalSlots += 1;
         if (isBlocked(whId, date, time)) { blockedSlots += 1; return; }
         // Count slot as booked if it has any capacity consumed
@@ -4213,17 +4408,17 @@ function exportDailySchedule() {
   let rows = [["المخزن","التاريخ","الوقت","الحالة","المورد","رقم الأوردر","السيارة/السائق"]];
   whIds.forEach(whId=>{
     let whName = WAREHOUSES[whId].name;
-    SLOTS_PER_DAY.forEach(time=>{
+    getSlotTimes(whId, date).forEach(time=>{
       if (isBlocked(whId, date, time)) {
-        rows.push([whName, formatDate(date), time, 'مغلق', '', '', '']);
+        rows.push([whName, formatDate(date), slotDisplayLabel(time, whId, date), 'مغلق', '', '', '']);
         return;
       }
       let slotBookings = (warehouseData[whId]?.bookings || []).filter(b => b.date === date && b.time === time);
       if (slotBookings.length) {
         let b = slotBookings[0];
-        rows.push([whName, formatDate(date), time, statusLabel(b.status), b.supplier||'', b.orderNum||'', (b.plate||'') + (b.driver?(' / '+b.driver):'')]);
+        rows.push([whName, formatDate(date), slotDisplayLabel(time, whId, date), statusLabel(b.status), b.supplier||'', b.orderNum||'', (b.plate||'') + (b.driver?(' / '+b.driver):'')]);
       } else {
-        rows.push([whName, formatDate(date), time, 'متاح', '', '', '']);
+        rows.push([whName, formatDate(date), slotDisplayLabel(time, whId, date), 'متاح', '', '', '']);
       }
     })
   });
@@ -4276,7 +4471,7 @@ function exportSlotsUtilization() {
     let bookedSlots = 0, blockedSlots = 0;
     let totalSlots = 0;
     whIds.forEach(whId => {
-      SLOTS_PER_DAY.forEach(time => {
+      getSlotTimes(whId, date).forEach(time => {
         totalSlots += 1;
         if (isBlocked(whId, date, time)) { blockedSlots += 1; return; }
         let used = getSlotBookedCount(whId, date, time);
@@ -4340,6 +4535,9 @@ window.closeModal = closeModal;
 window.pickSlot = pickSlot;
 window.addTruckLine = addTruckLine;
 window.removeTruckLine = removeTruckLine;
+window.addSlotDefinition = addSlotDefinition;
+window.editSlotDefinition = editSlotDefinition;
+window.deleteSlotDefinition = deleteSlotDefinition;
 window.enforceTruckLineLimit = enforceTruckLineLimit;
 window.completeBooking = completeBooking;
 window.cancelBooking = cancelBooking;
