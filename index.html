@@ -2134,7 +2134,7 @@ function renderWarehouse() {
     let capacityClass = available > 0 ? (available <= 1 ? 'capacity-warning' : '') : 'capacity-full';
     let capacityText = available > 0 ? (available <= 1 ? `⚠️ متبقي: ${fmtCap(available)} عربية فقط` : `متاح: ${fmtCap(available)} عربية`) : 'مكتمل';
     let clickFn = (st === 'available' || st === 'warning') ? `onclick="toggleBlock('${date}','${time}')"` : '';
-    let adminEditBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-details" type="button" onclick="editSlotCapacity('${date}','${time}')">تعديل السعة</button>` : '';
+    let adminEditBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-details" type="button" onclick="editSlotCapacity('${date}','${time}')">تعديل عدد السلوت</button>` : '';
     let adminBlockBtn = (currentWarehouseAccess === 'all') ? `<button class="btn-sm btn-details" type="button" onclick="toggleBlock('${date}','${time}')">${st === 'blocked' ? 'فتح' : 'قفل'}</button>` : '';
 
     return `<div class="slot-card ${st === 'warning' ? 'available' : st}" ${currentWarehouseAccess === 'all' ? '' : ''}>
@@ -2209,7 +2209,7 @@ function editSlotCapacity(date, time) {
   warehouseData[whId].slotCapacityOverrides = warehouseData[whId].slotCapacityOverrides || {};
   const current = warehouseData[whId].slotCapacityOverrides[key];
   const base = baseSlotCapacity(time);
-  let v = prompt(`تعديل سعة Slot (${time})\nالقيمة الافتراضية: ${base}\nاتركه فارغ لإزالة التعديل`, (current === undefined ? '' : String(current)));
+  let v = prompt(`تعديل عدد السلوت (${slotDisplayLabel(time)})\nالقيمة الافتراضية: ${base} عربية\nاتركه فارغ لإزالة التعديل`, (current === undefined ? '' : String(current)));
   if (v === null) return;
   v = String(v).trim();
   if (!v) {
@@ -2226,8 +2226,8 @@ function editSlotCapacity(date, time) {
     return;
   }
   const n = Number(v);
-  if (!Number.isFinite(n) || n < 0) {
-    alert('⚠️ أدخل رقم صحيح (0 أو أكثر)');
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+    alert('⚠️ أدخل رقم صحيح بدون كسور (0 أو أكثر)');
     return;
   }
   warehouseData[whId].slotCapacityOverrides[key] = n;
