@@ -1783,21 +1783,29 @@ async function upsertBlockedSlotToApi(whId, date, time, isBlockedNow) {
   try {
     const id = `${whId}|${date}|${time}`;
     if (isBlockedNow) {
-      await apiPost('upsertBlockedSlot', {
+      const payload = {
         id,
         warehouseId: whId,
         date,
         time,
         reason: 'manual',
         createdAt: nowIso(),
-      });
+      };
+      // Use GET first because the current Apps Script API handles most write
+      // actions through query params. Fall back to POST for newer deployments.
+      let res = await apiGet('upsertBlockedSlot', payload);
+      if (!res || res.ok === false) {
+        res = await apiPost('upsertBlockedSlot', payload);
+        if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to close slot');
+      }
     } else {
-      // If you added delete endpoint later, you can delete here.
-      // For now we just keep a record (optional). Uncomment if you add deleteBlockedSlot.
-      // await apiPost('deleteBlockedSlot', { id });
+      const res = await apiGet('deleteBlockedSlot', { id });
+      if (!res || res.ok === false) throw new Error((res && res.error) || 'Failed to open slot');
     }
+    return true;
   } catch (e) {
     console.error(e);
+    return false;
   }
 }
 
@@ -2392,7 +2400,7 @@ async function deleteSlotDefinition(date, time) {
   renderSupplierSlots();
 }
 
-function toggleBlock(date, time) {
+async function toggleBlock(date, time) {
   if (isWarehouseReadOnly()) { alert('⚠️ صلاحية عرض فقط'); return; }
   let whId = currentWarehouse;
   // Admin-only: only users with access "all" can open/close slots
@@ -2400,20 +2408,32 @@ function toggleBlock(date, time) {
     alert('غير مسموح: هذا الإجراء للادمن فقط');
     return;
   }
+  warehouseData[whId] = warehouseData[whId] || { bookings: [], blockedSlots: [], slotCapacityOverrides: {} };
+  warehouseData[whId].blockedSlots = Array.from(new Set(warehouseData[whId].blockedSlots || []));
   let k = getSlotKey(date, time);
   let i = warehouseData[whId].blockedSlots.indexOf(k);
   let isBlockedNow = false;
   if(i >= 0) {
-    warehouseData[whId].blockedSlots.splice(i,1);
+    warehouseData[whId].blockedSlots = warehouseData[whId].blockedSlots.filter(x => x !== k);
     isBlockedNow = false;
   } else {
     warehouseData[whId].blockedSlots.push(k);
     isBlockedNow = true;
   }
   saveWarehouseData(whId);
-  // Sync shared data
-  if (isBlockedNow) upsertBlockedSlotToApi(whId, date, time, true);
-  else apiGet('deleteBlockedSlot', { id: `${whId}|${date}|${time}` }).catch(()=>{});
+  renderWarehouse();
+  // Sync shared data, then refresh from the shared sheet so the status stays
+  // closed/open after reloads and on other devices.
+  const ok = await upsertBlockedSlotToApi(whId, date, time, isBlockedNow);
+  if (!ok) {
+    if (isBlockedNow) warehouseData[whId].blockedSlots = warehouseData[whId].blockedSlots.filter(x => x !== k);
+    else warehouseData[whId].blockedSlots.push(k);
+    saveWarehouseData(whId);
+    renderWarehouse();
+    alert('⚠️ لم يتم حفظ تعديل السلوت. راجع اتصال الإنترنت أو تحديث Apps Script.');
+    return;
+  }
+  await refreshDataWithLoader();
   renderWarehouse();
 }
 
