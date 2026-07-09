@@ -1386,19 +1386,36 @@ async function loadWarehouseDataFromApi() {
     // because the connection dropped after a booking number was generated.
     await retryPendingBookingSync();
 
+    function apiList(res) {
+      // Support different Apps Script response shapes:
+      // {ok:true,data:[...]}, {ok:true,rows:[...]}, {ok:true,data:{data:[...]}}, etc.
+      if (!res || res.ok === false) return [];
+      if (Array.isArray(res.data)) return res.data;
+      if (Array.isArray(res.rows)) return res.rows;
+      if (res.data && Array.isArray(res.data.data)) return res.data.data;
+      if (res.data && Array.isArray(res.data.rows)) return res.data.rows;
+      if (res.data && Array.isArray(res.data.items)) return res.data.items;
+      if (res.data && typeof res.data === 'object') {
+        const vals = Object.values(res.data);
+        if (vals.length && vals.every(v => v && typeof v === 'object' && !Array.isArray(v))) return vals;
+      }
+      if (res.result && Array.isArray(res.result)) return res.result;
+      return [];
+    }
+
     // Load bookings
     const bRes = await apiGet('listBookings');
-    const bookings = (bRes && bRes.ok && Array.isArray(bRes.data)) ? bRes.data : [];
+    const bookings = apiList(bRes);
     // Load blocked slots
     const blRes = await apiGet('listBlockedSlots');
-    const blocked = (blRes && blRes.ok && Array.isArray(blRes.data)) ? blRes.data : [];
+    const blocked = apiList(blRes);
     // Load slot capacity overrides (shared across devices)
     const capRes = await apiGet('listSlotCapacityOverrides');
-    const caps = (capRes && capRes.ok && Array.isArray(capRes.data)) ? capRes.data : [];
+    const caps = apiList(capRes);
     let slots = [];
     try {
       const slotRes = await apiGet('listSlotDefinitions');
-      slots = (slotRes && slotRes.ok && Array.isArray(slotRes.data)) ? slotRes.data : [];
+      slots = apiList(slotRes);
     } catch(e) { slots = []; }
 
     // Ensure base structure
@@ -1505,11 +1522,11 @@ async function loadWarehouseDataFromApi() {
     blocked.forEach(x => {
       // Prefer parsing from id because Google Sheets can return date/time cells
       // as Date objects/ISO strings. The id always keeps the exact slot key.
-      const id = String(x.id || '').replace(/^'/, '').trim();
+      const id = String(x.id || x.ID || x.Id || '').replace(/^'/, '').trim();
       const parts = id.includes('|') ? id.split('|') : [];
-      const whId = (parts[0] || x.warehouseId || x.warehouse || x.warehouseid || '').trim();
-      const date = (parts[1] || normalizeDate(x.date) || '').trim();
-      const time = (parts[2] || normalizeTime(x.time) || '').trim();
+      const whId = String(parts[0] || x.warehouseId || x.warehouse || x.warehouseid || x.WarehouseId || x.WarehouseID || '').replace(/^'/, '').trim();
+      const date = String(parts[1] || normalizeDate(x.date || x.Date) || '').replace(/^'/, '').trim();
+      const time = String(parts[2] || normalizeTime(x.time || x.Time) || '').replace(/^'/, '').trim();
       if (!whId || !warehouseData[whId] || !date || !time) return;
       const key = getSlotKey(date, time);
       if (!warehouseData[whId].blockedSlots.includes(key)) {
