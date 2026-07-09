@@ -1503,11 +1503,18 @@ async function loadWarehouseDataFromApi() {
     });
 
     blocked.forEach(x => {
-      const whId = x.warehouseId || x.warehouse || x.warehouseid;
-      const date = x.date || '';
-      const time = x.time || '';
+      // Prefer parsing from id because Google Sheets can return date/time cells
+      // as Date objects/ISO strings. The id always keeps the exact slot key.
+      const id = String(x.id || '').replace(/^'/, '').trim();
+      const parts = id.includes('|') ? id.split('|') : [];
+      const whId = (parts[0] || x.warehouseId || x.warehouse || x.warehouseid || '').trim();
+      const date = (parts[1] || normalizeDate(x.date) || '').trim();
+      const time = (parts[2] || normalizeTime(x.time) || '').trim();
       if (!whId || !warehouseData[whId] || !date || !time) return;
-      warehouseData[whId].blockedSlots.push(getSlotKey(date, time));
+      const key = getSlotKey(date, time);
+      if (!warehouseData[whId].blockedSlots.includes(key)) {
+        warehouseData[whId].blockedSlots.push(key);
+      }
     });
 
     // custom slot definitions (absolute per warehouse)
