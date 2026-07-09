@@ -20,6 +20,23 @@
     clearTimeout(t);
     return res.json();
   }
+  function buildApiGetUrl(action, params = {}) {
+    const url = new URL(API_URL);
+    url.searchParams.set('action', action);
+    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, String(v)));
+    url.searchParams.set('_ts', String(Date.now()));
+    return url.toString();
+  }
+  async function apiGetNoCors(action, params = {}) {
+    // Fallback for Apps Script / browser CORS issues. The request is still sent,
+    // but the response is opaque, so callers should verify by refreshing data.
+    await fetch(buildApiGetUrl(action, params), {
+      method: 'GET',
+      mode: 'no-cors',
+      cache: 'no-store',
+    });
+    return { ok: true, opaque: true };
+  }
   async function apiPost(action, data) {
     const payload = JSON.stringify({ action, data });
 
@@ -1780,17 +1797,19 @@ async function upsertBookingToApi(whId, booking, options = {}) {
 }
 
 async function upsertBlockedSlotToApi(whId, date, time, isBlockedNow) {
+  const id = `${whId}|${date}|${time}`;
+  const payload = {
+    id,
+    warehouseId: whId,
+    date,
+    time,
+    reason: 'manual',
+    createdAt: nowIso(),
+  };
+  const action = isBlockedNow ? 'upsertBlockedSlot' : 'deleteBlockedSlot';
+  const params = isBlockedNow ? payload : { id };
   try {
-    const id = `${whId}|${date}|${time}`;
     if (isBlockedNow) {
-      const payload = {
-        id,
-        warehouseId: whId,
-        date,
-        time,
-        reason: 'manual',
-        createdAt: nowIso(),
-      };
       // Use GET first because the current Apps Script API handles most write
       // actions through query params. Fall back to POST for newer deployments.
       let res = await apiGet('upsertBlockedSlot', payload);
@@ -1805,7 +1824,15 @@ async function upsertBlockedSlotToApi(whId, date, time, isBlockedNow) {
     return true;
   } catch (e) {
     console.error(e);
-    return false;
+    // Last-resort fallback: some browsers block reading Apps Script responses
+    // with CORS even though they allow sending no-cors GET requests.
+    try {
+      await apiGetNoCors(action, params);
+      return true;
+    } catch (e2) {
+      console.error(e2);
+      return false;
+    }
   }
 }
 
