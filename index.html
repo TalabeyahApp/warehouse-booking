@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Remote API -->
 <script>
-  const API_URL = "https://script.google.com/macros/s/AKfycbxQdTlYfYmKHFqM6Lz1VmgcySQIsRvmIGok6_RnxXgqWZQyfnm_mt4uV__0vZWmeRuhsw/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbyLymdbWF8YWKLebuuKTgzYRrlY5jo2FNcjKZk1PXcvZoDhwPEriGYOThKxwJVLA1u84g/exec";
   async function apiGet(action, params = {}) {
     const url = new URL(API_URL);
     url.searchParams.set('action', action);
@@ -2948,7 +2948,7 @@ async function submitBooking() {
     const list = Array.isArray(remoteSuppliers) ? remoteSuppliers : [];
     const ok = list.some(s => String(s.company || '').trim().toLowerCase() === supplier.toLowerCase());
     if (!ok) {
-      showAlert('bookAlert', 'اسم المورد غير موجود', 'error');
+      showAlert('bookAlert', 'اسم المورد غير م��جود', 'error');
       return;
     }
   } else if (canBookAnySupplierByCode(currentSupplierData)) {
