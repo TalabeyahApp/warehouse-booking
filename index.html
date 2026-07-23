@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Remote API -->
 <script>
-  const API_URL = "https://script.google.com/macros/s/AKfycbyLymdbWF8YWKLebuuKTgzYRrlY5jo2FNcjKZk1PXcvZoDhwPEriGYOThKxwJVLA1u84g/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbxQdTlYfYmKHFqM6Lz1VmgcySQIsRvmIGok6_RnxXgqWZQyfnm_mt4uV__0vZWmeRuhsw/exec";
   async function apiGet(action, params = {}) {
     const url = new URL(API_URL);
     url.searchParams.set('action', action);
@@ -336,13 +336,31 @@ tbody tr:hover td{background:#fafaf8}
 <script>
   // Fail-safe: if any runtime error happens, stop infinite loader.
   try {
+    function showLoginOnlyIfNotLoggedIn() {
+      try {
+        const ov = document.getElementById('loaderOverlay');
+        if (ov) ov.style.display = 'none';
+      } catch(_) {}
+      try { document.body.classList.remove('boot-loading'); } catch(_) {}
+
+      // Do NOT bring the login screen back after a successful login. Some API
+      // refresh errors can happen while the supplier/warehouse page is already
+      // open; showing the login screen then creates the split-screen bug.
+      const topbar = document.getElementById('topbar');
+      const topbarVisible = topbar && window.getComputedStyle(topbar).display !== 'none';
+      const activePage = document.querySelector('.page.active');
+      if (topbarVisible || activePage) return;
+
+      try {
+        const login = document.getElementById('loginScreen');
+        if (login) login.style.display = 'flex';
+      } catch(_) {}
+    }
     window.addEventListener('error', () => {
-      try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
-      try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
+      showLoginOnlyIfNotLoggedIn();
     });
     window.addEventListener('unhandledrejection', () => {
-      try { const ov = document.getElementById('loaderOverlay'); if (ov) ov.style.display = 'none'; } catch(_) {}
-      try { document.getElementById('loginScreen').style.display = 'block'; } catch(_) {}
+      showLoginOnlyIfNotLoggedIn();
     });
   } catch(e) {}
 </script>
@@ -627,7 +645,7 @@ function closeSignupModal(){
     <div class="report-filters" style="margin-top:0">
       <div class="date-filter-field"><label>From</label><input type="date" class="date-input" id="myBookingsFrom" placeholder="من"></div>
       <div class="date-filter-field"><label>To</label><input type="date" class="date-input" id="myBookingsTo" placeholder="إلى"></div>
-      <input type="text" class="date-input" id="myBookingsSupplier" placeholder="اسم المورد" style="min-width:180px;display:none">
+      <input type="text" class="date-input" id="myBookingsSupplier" placeholder="اسم / كود المورد" style="min-width:180px;display:none">
     </div>
     <div style="overflow-x:auto;max-height:220px">
       <table class="preview-table" style="margin-top:0">
@@ -1386,36 +1404,19 @@ async function loadWarehouseDataFromApi() {
     // because the connection dropped after a booking number was generated.
     await retryPendingBookingSync();
 
-    function apiList(res) {
-      // Support different Apps Script response shapes:
-      // {ok:true,data:[...]}, {ok:true,rows:[...]}, {ok:true,data:{data:[...]}}, etc.
-      if (!res || res.ok === false) return [];
-      if (Array.isArray(res.data)) return res.data;
-      if (Array.isArray(res.rows)) return res.rows;
-      if (res.data && Array.isArray(res.data.data)) return res.data.data;
-      if (res.data && Array.isArray(res.data.rows)) return res.data.rows;
-      if (res.data && Array.isArray(res.data.items)) return res.data.items;
-      if (res.data && typeof res.data === 'object') {
-        const vals = Object.values(res.data);
-        if (vals.length && vals.every(v => v && typeof v === 'object' && !Array.isArray(v))) return vals;
-      }
-      if (res.result && Array.isArray(res.result)) return res.result;
-      return [];
-    }
-
     // Load bookings
     const bRes = await apiGet('listBookings');
-    const bookings = apiList(bRes);
+    const bookings = (bRes && bRes.ok && Array.isArray(bRes.data)) ? bRes.data : [];
     // Load blocked slots
     const blRes = await apiGet('listBlockedSlots');
-    const blocked = apiList(blRes);
+    const blocked = (blRes && blRes.ok && Array.isArray(blRes.data)) ? blRes.data : [];
     // Load slot capacity overrides (shared across devices)
     const capRes = await apiGet('listSlotCapacityOverrides');
-    const caps = apiList(capRes);
+    const caps = (capRes && capRes.ok && Array.isArray(capRes.data)) ? capRes.data : [];
     let slots = [];
     try {
       const slotRes = await apiGet('listSlotDefinitions');
-      slots = apiList(slotRes);
+      slots = (slotRes && slotRes.ok && Array.isArray(slotRes.data)) ? slotRes.data : [];
     } catch(e) { slots = []; }
 
     // Ensure base structure
@@ -1522,11 +1523,11 @@ async function loadWarehouseDataFromApi() {
     blocked.forEach(x => {
       // Prefer parsing from id because Google Sheets can return date/time cells
       // as Date objects/ISO strings. The id always keeps the exact slot key.
-      const id = String(x.id || x.ID || x.Id || '').replace(/^'/, '').trim();
+      const id = String(x.id || '').replace(/^'/, '').trim();
       const parts = id.includes('|') ? id.split('|') : [];
-      const whId = String(parts[0] || x.warehouseId || x.warehouse || x.warehouseid || x.WarehouseId || x.WarehouseID || '').replace(/^'/, '').trim();
-      const date = String(parts[1] || normalizeDate(x.date || x.Date) || '').replace(/^'/, '').trim();
-      const time = String(parts[2] || normalizeTime(x.time || x.Time) || '').replace(/^'/, '').trim();
+      const whId = (parts[0] || x.warehouseId || x.warehouse || x.warehouseid || '').trim();
+      const date = (parts[1] || normalizeDate(x.date) || '').trim();
+      const time = (parts[2] || normalizeTime(x.time) || '').trim();
       if (!whId || !warehouseData[whId] || !date || !time) return;
       const key = getSlotKey(date, time);
       if (!warehouseData[whId].blockedSlots.includes(key)) {
@@ -2657,12 +2658,12 @@ function renderMyBookings() {
       const sameSupplier = ((b.supplier || '').trim() === supplierName);
       const allowed = canSeeAllSuppliers ? true : sameSupplier;
       if (!allowed) return;
-      const d = (b.date || '').trim();
+      // Some old rows can come back from Sheets as ISO dates. Compare only YYYY-MM-DD.
+      const d = normalizeBookingDateForFilter(b.date);
       if (fromStr && d && d < fromStr) return;
       if (toStr && d && d > toStr) return;
       if (canSeeAllSuppliers && supplierFilter) {
-        const s = String(b.supplier || '').trim().toLowerCase();
-        if (!s.includes(supplierFilter)) return;
+        if (!bookingMatchesSupplierNameOrCode(b, supplierFilter)) return;
       }
       all.push({ ...b, warehouseId: whId });
     });
@@ -2686,9 +2687,10 @@ function renderMyBookings() {
 
   tbody.innerHTML = groups.slice(0, 50).map(g => {
     let parts = g.parts.slice().sort((a,b)=>(a.time||'').localeCompare(b.time||''));
-    let whName = WAREHOUSES[parts[0].warehouseId]?.name || '';
-    let date = parts[0].date;
-    let timeRange = parts.map(p=>p.time).filter(Boolean);
+    let whId = parts[0].warehouseId || parts[0].warehouse || '';
+    let whName = WAREHOUSES[whId]?.name || '';
+    let date = normalizeBookingDateForFilter(parts[0].date);
+    let timeRange = parts.map(p=>normalizeBookingTimeForDisplay(p.time)).filter(Boolean);
     let timeLabel = timeRange.length ? (slotDisplayLabel(timeRange[0], whId, date) + (timeRange.length>1 ? ' +'+(timeRange.length-1) : '')) : '-';
     let trucks = parts.reduce((s,p)=>s + (parseFloat(p.truckCount)||0), 0);
     let cartons = parts.reduce((s,p)=>s + (parseInt(p.cartons)||0), 0);
@@ -2720,6 +2722,44 @@ function renderMyBookings() {
       </td>
     </tr>`;
   }).join('');
+}
+
+function bookingMatchesSupplierNameOrCode(booking, filterText) {
+  const f = String(filterText || '').trim().toLowerCase();
+  if (!f) return true;
+
+  const supplierName = String(booking?.supplier || '').trim();
+  if (supplierName.toLowerCase().includes(f)) return true;
+
+  // Bookings store the supplier/company name. To filter by code, look up the
+  // supplier user whose company matches this booking, then compare supplierCode.
+  const users = getSuppliersForLogin() || [];
+  const matches = users.filter(u => String(u.company || '').trim() === supplierName);
+  return matches.some(u => {
+    const code = String(u.supplierCode || u.suppliercode || u.code || '').trim().toLowerCase();
+    const username = String(u.username || '').trim().toLowerCase();
+    return (code && code.includes(f)) || (username && username.includes(f));
+  });
+}
+
+function normalizeBookingDateForFilter(v) {
+  const s = String(v || '').replace(/^'/, '').trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
+  return s;
+}
+
+function normalizeBookingTimeForDisplay(v) {
+  const s = String(v || '').replace(/^'/, '').trim();
+  if (!s) return '';
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (m) return String(m[1]).padStart(2, '0') + ':' + m[2];
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+  }
+  return s;
 }
 
 function minutesUntilSlotStart(dateStr, timeStr) {
@@ -2948,7 +2988,7 @@ async function submitBooking() {
     const list = Array.isArray(remoteSuppliers) ? remoteSuppliers : [];
     const ok = list.some(s => String(s.company || '').trim().toLowerCase() === supplier.toLowerCase());
     if (!ok) {
-      showAlert('bookAlert', 'اسم المورد غير م��جود', 'error');
+      showAlert('bookAlert', 'اسم المورد غير موجود', 'error');
       return;
     }
   } else if (canBookAnySupplierByCode(currentSupplierData)) {
