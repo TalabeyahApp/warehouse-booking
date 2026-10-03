@@ -8,17 +8,20 @@
 <!-- Remote API -->
 <script>
   const API_URL = "https://script.google.com/macros/s/AKfycbyLymdbWF8YWKLebuuKTgzYRrlY5jo2FNcjKZk1PXcvZoDhwPEriGYOThKxwJVLA1u84g/exec";
-  async function apiGet(action, params = {}) {
+  async function apiGet(action, params = {}, timeoutMs = 12000) {
     const url = new URL(API_URL);
     url.searchParams.set('action', action);
     Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, String(v)));
     // cache-bust so users get latest data on refresh
     url.searchParams.set('_ts', String(Date.now()));
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 12000);
-    const res = await fetch(url.toString(), { method: 'GET', signal: ctrl.signal });
-    clearTimeout(t);
-    return res.json();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url.toString(), { method: 'GET', signal: ctrl.signal });
+      return await res.json();
+    } finally {
+      clearTimeout(t);
+    }
   }
   function buildApiGetUrl(action, params = {}) {
     const url = new URL(API_URL);
@@ -1412,7 +1415,14 @@ async function loadWarehouseDataFromApi() {
     let bookings = [], blocked = [], caps = [], slots = [];
     let loadedVersion = '';
     let boot = null;
-    try { boot = await apiGet('bootstrap'); } catch(e) { boot = null; }
+    let bootFailed = false;
+    for (let attempt = 0; attempt < 2 && !boot; attempt++) {
+      try { boot = await apiGet('bootstrap', {}, 30000); }
+      catch(e) { bootFailed = true; }
+    }
+    // Slow/unreachable server: keep the data we already have instead of
+    // firing 4 more requests at it.
+    if (!boot && bootFailed) throw new Error('bootstrap timed out');
     if (boot && boot.ok && boot.data && Array.isArray(boot.data.bookings)) {
       bookings = boot.data.bookings;
       blocked = Array.isArray(boot.data.blockedSlots) ? boot.data.blockedSlots : [];
@@ -1633,7 +1643,7 @@ async function silentRefreshTick() {
     } catch (e) {}
     // Force fresh fetch (without loader)
     dataLoadPromise = null;
-    await withTimeout(loadWarehouseDataFromApi(), 10000);
+    await withTimeout(loadWarehouseDataFromApi(), 40000);
 
     // Re-render current visible page to reflect new data, without changing tabs.
     const pageId = getActivePageId();
@@ -1705,7 +1715,7 @@ async function refreshDataWithLoader(force) {
     }
     showLoader('جاري التحميل...');
     dataLoadPromise = null;
-    await withTimeout(ensureDataLoaded(), 12000);
+    await withTimeout(ensureDataLoaded(), 40000);
   } finally {
     hideLoader();
   }
