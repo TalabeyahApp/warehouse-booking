@@ -1704,6 +1704,13 @@ function withTimeout(promise, ms) {
   ]);
 }
 
+// Render from the data we already have (it contains ALL dates), then check
+// for changes in the background. The screen updates instantly instead of
+// waiting 1-10s for Apps Script.
+function refreshInBackground() {
+  try { silentRefreshTick(); } catch (e) {}
+}
+
 async function refreshDataWithLoader(force) {
   try {
     // Fast path: data was loaded < 60s ago and the server version is unchanged.
@@ -2316,7 +2323,8 @@ function renderWarehouse() {
 
 // Load latest data when changing warehouse date
 document.getElementById('whDate')?.addEventListener('change', () => {
-  refreshDataWithLoader().then(() => renderWarehouse());
+  renderWarehouse();
+  refreshInBackground();
 });
 
 function changeDay(n) {
@@ -2324,7 +2332,8 @@ function changeDay(n) {
   let d = new Date(el.value || today());
   d.setDate(d.getDate() + n);
   el.value = d.toISOString().split('T')[0];
-  refreshDataWithLoader().then(() => renderWarehouse());
+  renderWarehouse();
+  refreshInBackground();
 }
 
 function changeBookingsDay(delta) {
@@ -4184,7 +4193,8 @@ document.getElementById('closeModalBtn').onclick = closeModal;
 document.getElementById('modalOverlay').onclick = closeModal;
 document.getElementById('filterStatus').onchange = renderBookingsTable;
 document.getElementById('filterDate').onchange = () => {
-  refreshDataWithLoader().then(() => renderBookingsTable());
+  renderBookingsTable();
+  refreshInBackground();
 };
 document.getElementById('bookingsPrevDayBtn').onclick = () => { try { changeBookingsDay(-1); } catch(e) {} };
 document.getElementById('bookingsNextDayBtn').onclick = () => { try { changeBookingsDay(1); } catch(e) {} };
@@ -4211,8 +4221,8 @@ document.getElementById('reportsWarehouseFilter').onchange = () => { refreshRepo
 // Reports dashboard listeners
 document.getElementById('rDailyDate').onchange = refreshReportsDashboard;
 document.getElementById('rBookingsStatus').onchange = refreshReportsDashboard;
-document.getElementById('rFrom').onchange = () => { refreshDataWithLoader().then(() => refreshReportsDashboard()); };
-document.getElementById('rTo').onchange = () => { refreshDataWithLoader().then(() => refreshReportsDashboard()); };
+document.getElementById('rFrom').onchange = () => { refreshReportsDashboard(); refreshInBackground(); };
+document.getElementById('rTo').onchange = () => { refreshReportsDashboard(); refreshInBackground(); };
 
 document.getElementById('exportDailyBtn').onclick = exportDailySchedule;
 document.getElementById('exportBookingsBtn').onclick = exportBookingsReport;
