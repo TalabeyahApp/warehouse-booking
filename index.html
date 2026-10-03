@@ -1398,6 +1398,8 @@ function initWarehouseData() {
 
 // ==================== SYNC WITH GOOGLE SHEETS ====================
 let dataLoadPromise = null;
+let lastDataVersion = '';   // server data version from the last successful load
+let lastDataLoadAt = 0;     // when that load finished
 
 async function loadWarehouseDataFromApi() {
   try {
@@ -1405,20 +1407,30 @@ async function loadWarehouseDataFromApi() {
     // because the connection dropped after a booking number was generated.
     await retryPendingBookingSync();
 
-    // Load bookings
-    const bRes = await apiGet('listBookings');
-    const bookings = (bRes && bRes.ok && Array.isArray(bRes.data)) ? bRes.data : [];
-    // Load blocked slots
-    const blRes = await apiGet('listBlockedSlots');
-    const blocked = (blRes && blRes.ok && Array.isArray(blRes.data)) ? blRes.data : [];
-    // Load slot capacity overrides (shared across devices)
-    const capRes = await apiGet('listSlotCapacityOverrides');
-    const caps = (capRes && capRes.ok && Array.isArray(capRes.data)) ? capRes.data : [];
-    let slots = [];
-    try {
-      const slotRes = await apiGet('listSlotDefinitions');
+    // Load bookings + blocked slots + capacity overrides + slot definitions
+    // in ONE request (bootstrap). Falls back to parallel requests on an old API.
+    let bookings = [], blocked = [], caps = [], slots = [];
+    let loadedVersion = '';
+    let boot = null;
+    try { boot = await apiGet('bootstrap'); } catch(e) { boot = null; }
+    if (boot && boot.ok && boot.data && Array.isArray(boot.data.bookings)) {
+      bookings = boot.data.bookings;
+      blocked = Array.isArray(boot.data.blockedSlots) ? boot.data.blockedSlots : [];
+      caps = Array.isArray(boot.data.slotCapacityOverrides) ? boot.data.slotCapacityOverrides : [];
+      slots = Array.isArray(boot.data.slotDefinitions) ? boot.data.slotDefinitions : [];
+      loadedVersion = String(boot.version || '');
+    } else {
+      const [bRes, blRes, capRes, slotRes] = await Promise.all([
+        apiGet('listBookings'),
+        apiGet('listBlockedSlots'),
+        apiGet('listSlotCapacityOverrides'),
+        apiGet('listSlotDefinitions').catch(() => null),
+      ]);
+      bookings = (bRes && bRes.ok && Array.isArray(bRes.data)) ? bRes.data : [];
+      blocked = (blRes && blRes.ok && Array.isArray(blRes.data)) ? blRes.data : [];
+      caps = (capRes && capRes.ok && Array.isArray(capRes.data)) ? capRes.data : [];
       slots = (slotRes && slotRes.ok && Array.isArray(slotRes.data)) ? slotRes.data : [];
-    } catch(e) { slots = []; }
+    }
 
     // Ensure base structure
     slotDefinitions = {};
@@ -1573,6 +1585,9 @@ async function loadWarehouseDataFromApi() {
       warehouseData[whId].slotCapacityOverrides[getSlotKey(date, time)] = n;
     });
 
+    lastDataVersion = loadedVersion;
+    lastDataLoadAt = Date.now();
+
     // Optional: still cache locally (offline fallback)
     for (let whId in WAREHOUSES) {
       localStorage.setItem(`whBookings_${whId}`, JSON.stringify(warehouseData[whId].bookings));
@@ -1608,6 +1623,14 @@ async function silentRefreshTick() {
     silentRefreshing = true;
     // First push any bookings that were created while the connection was down.
     await retryPendingBookingSync();
+    // Cheap check first: if the server data version is unchanged, skip the full reload.
+    // (A full reload still happens at least once every 2 minutes.)
+    try {
+      if (lastDataVersion && (Date.now() - lastDataLoadAt) < 120000) {
+        const vr = await withTimeout(apiGet('version'), 8000);
+        if (vr && vr.ok && String(vr.version) === lastDataVersion) return;
+      }
+    } catch (e) {}
     // Force fresh fetch (without loader)
     dataLoadPromise = null;
     await withTimeout(loadWarehouseDataFromApi(), 10000);
@@ -1671,8 +1694,15 @@ function withTimeout(promise, ms) {
   ]);
 }
 
-async function refreshDataWithLoader() {
+async function refreshDataWithLoader(force) {
   try {
+    // Fast path: data was loaded < 60s ago and the server version is unchanged.
+    if (!force && lastDataVersion && (Date.now() - lastDataLoadAt) < 60000) {
+      try {
+        const vr = await withTimeout(apiGet('version'), 6000);
+        if (vr && vr.ok && String(vr.version) === lastDataVersion) return;
+      } catch (e) {}
+    }
     showLoader('جاري التحميل...');
     dataLoadPromise = null;
     await withTimeout(ensureDataLoaded(), 12000);
@@ -2486,7 +2516,7 @@ async function toggleBlock(date, time) {
     alert('⚠️ لم يتم حفظ تعديل السلوت. راجع اتصال الإنترنت أو تحديث Apps Script.');
     return;
   }
-  await refreshDataWithLoader();
+  await refreshDataWithLoader(true);
   renderWarehouse();
 }
 
@@ -3168,10 +3198,9 @@ async function submitBooking() {
   showLoader('جاري حفظ الحجز...');
   let syncOk = false;
   try {
-    const results = [];
-    for (let b of createdBookings) {
-      results.push(await upsertBookingToApi(whId, b, { throwOnFail: false }));
-    }
+    const results = await Promise.all(
+      createdBookings.map(b => upsertBookingToApi(whId, b, { throwOnFail: false }))
+    );
     syncOk = results.every(Boolean);
   } finally {
     hideLoader();
