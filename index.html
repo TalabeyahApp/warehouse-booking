@@ -3967,7 +3967,10 @@ async function openWarehousesModal() {
 }
 function addWarehouseRow() {
   readWhDraftInputs();
-  whDraft.push({ id: 'wh' + Date.now().toString(36), name: '', code: '', lat: '', lng: '', active: true, isNew: true });
+  let n = 1;
+  const usedIds = new Set(whDraft.map(w => w.id).concat(Object.keys(WAREHOUSES)));
+  while (usedIds.has('warehouse' + n)) n++;
+  whDraft.push({ id: 'warehouse' + n, name: '', code: '', lat: '', lng: '', active: true, isNew: true });
   renderWarehousesModal();
 }
 async function deleteWarehouseRow(i) {
