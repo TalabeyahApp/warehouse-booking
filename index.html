@@ -845,9 +845,9 @@ const WAREHOUSE_LOCATIONS = {
 const WH_CACHE_KEY = 'whList_v1';
 const WH_SELECTS = [
   { id: 'signupWarehouse', prefix: '🏭 ', all: false, activeOnly: true },
-  { id: 'selectedWarehouse', prefix: '', all: false },
+  { id: 'selectedWarehouse', prefix: '', all: false, activeOnly: true, keepAssigned: true },
   { id: 'bookingWarehouseSelect', prefix: '🏭 ', all: false, activeOnly: true },
-  { id: 'bookingsWarehouseFilter', prefix: '', all: true },
+  { id: 'bookingsWarehouseFilter', prefix: '', all: true, activeOnly: true, keepAssigned: true },
   { id: 'reportsWarehouseFilter', prefix: '', all: true },
 ];
 function whEsc(v) {
@@ -859,7 +859,16 @@ function populateWarehouseSelects() {
     if (!el) return;
     const prev = el.value;
     let html = cfg.all ? '<option value="">كل المخازن</option>' : '';
-    const ids = Object.keys(WAREHOUSES).filter(id => !cfg.activeOnly || WAREHOUSES[id].active !== false);
+    // A branch user whose own warehouse is hidden must still see it (it's the only one they can use).
+    let assigned = '';
+    if (cfg.keepAssigned) {
+      try {
+        if (typeof currentWarehouseAccess !== 'undefined' && (currentWarehouseAccess === 'single' || currentWarehouseAccess === 'single_view')) {
+          assigned = (currentWarehouseUserData && currentWarehouseUserData.warehouseId) || '';
+        }
+      } catch (e) {}
+    }
+    const ids = Object.keys(WAREHOUSES).filter(id => !cfg.activeOnly || WAREHOUSES[id].active !== false || id === assigned);
     ids.forEach(id => {
       const hidden = WAREHOUSES[id].active === false ? ' (مخفي)' : '';
       html += `<option value="${whEsc(id)}">${cfg.prefix}${whEsc(WAREHOUSES[id].name)}${hidden}</option>`;
@@ -869,10 +878,11 @@ function populateWarehouseSelects() {
     else if (!cfg.all) el.value = ids[0] || '';
   });
   try {
-    if (typeof currentWarehouse !== 'undefined' && !WAREHOUSES[currentWarehouse]) {
-      currentWarehouse = Object.keys(WAREHOUSES)[0];
-      const sw = document.getElementById('selectedWarehouse');
-      if (sw) sw.value = currentWarehouse;
+    const sw = document.getElementById('selectedWarehouse');
+    if (typeof currentWarehouse !== 'undefined' && sw && sw.options.length) {
+      const visible = Array.from(sw.options).map(o => o.value);
+      if (visible.indexOf(currentWarehouse) < 0) currentWarehouse = sw.value || visible[0];
+      else sw.value = currentWarehouse;
     }
   } catch (e) {}
 }
@@ -3409,6 +3419,9 @@ function renderBookingsTable() {
   
   let allBookings = [];
   for (let whId in warehouseData) {
+    if (!WAREHOUSES[whId]) continue;
+    // Hidden warehouses don't show on this screen (unless picked explicitly, e.g. a branch user's own).
+    if (!warehouseFilter && WAREHOUSES[whId].active === false) continue;
     if (!warehouseFilter || warehouseFilter === whId) {
       allBookings.push(...warehouseData[whId].bookings.map(b => ({ ...b, warehouseId: whId, warehouseName: WAREHOUSES[whId].name })));
     }
