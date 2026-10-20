@@ -332,6 +332,13 @@ tbody tr:hover td{background:#fafaf8}
 .preview-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px}
 .preview-table thead th{text-align:right;font-size:9px;font-weight:700;color:var(--muted);padding:0 8px 7px 0}
 .preview-table tbody td{padding:7px 8px 7px 0}
+
+.sup-suggest{position:absolute;inset-inline:0;top:100%;z-index:60;background:var(--surface,#fff);border:1px solid var(--border,#ddd9d0);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:260px;overflow:auto;margin-top:4px}
+.sup-suggest .sup-item{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border,#eee)}
+.sup-suggest .sup-item:last-child{border-bottom:0}
+.sup-suggest .sup-item:hover,.sup-suggest .sup-item.active{background:var(--accent-light,#fdf0eb)}
+.sup-suggest .sup-code{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted,#8a8680);white-space:nowrap}
+.sup-suggest .sup-empty{padding:10px 12px;color:var(--muted,#8a8680);font-size:13px}
 </style>
 </head>
 <body>
@@ -584,7 +591,7 @@ function closeSignupModal(){
     <div class="panel">
       <h2>📅 احجز موعد جديد</h2>
       <div class="form-group" id="supCodeGroup" style="display:none"><label>كود المورد</label><input type="text" id="supCode" placeholder="اكتب كود المورد"></div>
-      <div class="form-group"><label>اسم المورد / الشركة</label><input type="text" id="supName" readonly style="background:#f0f0ec" placeholder="اكتب اسم المورد"><select class="date-input" id="supNameSelect" style="display:none;width:100%;margin-top:0"></select></div>
+      <div class="form-group" style="position:relative"><label>اسم المورد / الشركة</label><input type="text" id="supName" readonly autocomplete="off" style="background:#f0f0ec" placeholder="اكتب اسم المورد"><div id="supNameSuggest" class="sup-suggest" style="display:none"></div><select class="date-input" id="supNameSelect" style="display:none;width:100%;margin-top:0"></select></div>
       <div class="form-row">
         <div class="form-group"><label>رقم الأوردر</label><input type="text" id="supOrder" placeholder="PO-12345"></div>
         <div class="form-group"><label>نوع البضاعة <span style="color:red">*</span></label>
@@ -1431,6 +1438,7 @@ function fillSupplierNameFromCode() {
     const match = findSupplierByCode(code);
     supNameEl.value = match ? (match.company || '') : '';
     if (sel && match && isSupplierAdminUser(currentSupplierData)) sel.value = match.company || '';
+    hideSupplierSuggestions();
   } catch(e) {}
 }
 
@@ -1463,6 +1471,84 @@ function onSupplierNameDropdownChange() {
     const match = supplierAdminOptions().find(s => String(s.company || '') === String(sel.value || ''));
     if (codeInp && match) codeInp.value = String(match.supplierCode || match.suppliercode || match.code || '');
   } catch(e) {}
+}
+
+// ---------- Supplier search box (name <-> code, both directions) ----------
+function normSearch(v) {
+  return String(v == null ? '' : v).toLowerCase()
+    .replace(/[ً-ْـ]/g, '')
+    .replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ').trim();
+}
+function supplierPickerEnabled() {
+  try { return !!currentSupplierData && (isSupplierAdminUser(currentSupplierData) || canBookAnySupplierByCode(currentSupplierData)); }
+  catch (e) { return false; }
+}
+function supplierCodeOf(s) { return String((s && (s.supplierCode || s.suppliercode || s.code)) || '').trim(); }
+function supplierPickOptions() {
+  const seen = new Set();
+  return (getSuppliersForLogin() || [])
+    .filter(s => !isSupplierAdminUser(s) && String(s.company || '').trim())
+    .filter(s => { const k = normSearch(s.company) + '|' + supplierCodeOf(s); if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => String(a.company || '').localeCompare(String(b.company || ''), 'ar'));
+}
+let supSuggestItems = [];
+let supSuggestIdx = -1;
+function hideSupplierSuggestions() {
+  const box = document.getElementById('supNameSuggest');
+  if (box) box.style.display = 'none';
+  supSuggestIdx = -1;
+}
+function renderSupplierSuggestions() {
+  const box = document.getElementById('supNameSuggest');
+  const inp = document.getElementById('supName');
+  if (!box || !inp || !supplierPickerEnabled() || inp.readOnly) { hideSupplierSuggestions(); return; }
+  const q = normSearch(inp.value);
+  const all = supplierPickOptions();
+  supSuggestItems = (q ? all.filter(s => normSearch(s.company).includes(q) || normSearch(supplierCodeOf(s)).includes(q)) : all).slice(0, 12);
+  supSuggestIdx = -1;
+  if (!supSuggestItems.length) {
+    box.innerHTML = '<div class="sup-empty">لا توجد نتائج</div>';
+  } else {
+    box.innerHTML = supSuggestItems.map((s, i) =>
+      `<div class="sup-item" data-i="${i}"><span>${whEsc(s.company)}</span><span class="sup-code">${whEsc(supplierCodeOf(s))}</span></div>`
+    ).join('');
+  }
+  box.style.display = 'block';
+}
+function pickSupplierSuggestion(i) {
+  const s = supSuggestItems[i];
+  if (!s) return;
+  const inp = document.getElementById('supName');
+  const codeInp = document.getElementById('supCode');
+  if (inp) inp.value = s.company || '';
+  if (codeInp) codeInp.value = supplierCodeOf(s);
+  hideSupplierSuggestions();
+}
+function onSupplierNameInput() {
+  if (!supplierPickerEnabled()) return;
+  const inp = document.getElementById('supName');
+  const codeInp = document.getElementById('supCode');
+  const q = normSearch(inp.value);
+  // exact company name => fill the code; anything else => clear the code so they can never mismatch
+  const exact = q ? supplierPickOptions().find(s => normSearch(s.company) === q) : null;
+  if (codeInp) codeInp.value = exact ? supplierCodeOf(exact) : '';
+  renderSupplierSuggestions();
+}
+function onSupplierNameKey(e) {
+  const box = document.getElementById('supNameSuggest');
+  const open = box && box.style.display !== 'none' && supSuggestItems.length;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!open) { renderSupplierSuggestions(); return; }
+    e.preventDefault();
+    supSuggestIdx = (supSuggestIdx + (e.key === 'ArrowDown' ? 1 : -1) + supSuggestItems.length) % supSuggestItems.length;
+    box.querySelectorAll('.sup-item').forEach((el, i) => el.classList.toggle('active', i === supSuggestIdx));
+    box.querySelectorAll('.sup-item')[supSuggestIdx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    if (open) { e.preventDefault(); pickSupplierSuggestion(supSuggestIdx >= 0 ? supSuggestIdx : 0); }
+  } else if (e.key === 'Escape') {
+    hideSupplierSuggestions();
+  }
 }
 
 function normalizePassword(v) {
@@ -4262,23 +4348,20 @@ function applySupplierLogin(match) {
   if (supCodeGroup) supCodeGroup.style.display = canUseAnyCode ? 'block' : 'none';
   if (supCodeEl) supCodeEl.value = '';
   if (supNameSelect) {
-    supNameSelect.style.display = isSupplierAdmin ? 'block' : 'none';
-    if (isSupplierAdmin) populateSupplierAdminDropdown();
+    supNameSelect.style.display = 'none'; // replaced by the search box below
     supNameSelect.value = '';
   }
+  hideSupplierSuggestions();
   const supNameEl = document.getElementById('supName');
   if (supNameEl) {
-    if (isSupplierAdmin) {
-      supNameEl.readOnly = true;
-      supNameEl.style.display = 'none';
-      supNameEl.style.background = '#f0f0ec';
-      supNameEl.value = '';
-    } else if (canBookAnySupplierByCode(match)) {
-      supNameEl.readOnly = true;
+    if (isSupplierAdmin || canBookAnySupplierByCode(match)) {
+      supNameEl.readOnly = false;
       supNameEl.style.display = 'block';
-      supNameEl.style.background = '#f0f0ec';
+      supNameEl.style.background = '';
+      supNameEl.placeholder = 'ابحث باسم الشركة أو بالكود...';
       supNameEl.value = '';
     } else {
+      supNameEl.placeholder = 'اكتب اسم المورد';
       supNameEl.readOnly = true;
       supNameEl.style.display = 'block';
       supNameEl.style.background = '#f0f0ec';
@@ -4423,6 +4506,20 @@ document.getElementById('myBookingsFrom').onchange = renderMyBookings;
 document.getElementById('myBookingsTo').onchange = renderMyBookings;
 document.getElementById('myBookingsSupplier').oninput = renderMyBookings;
 document.getElementById('supCode').oninput = fillSupplierNameFromCode;
+(function wireSupplierSearch() {
+  const inp = document.getElementById('supName');
+  const box = document.getElementById('supNameSuggest');
+  if (!inp || !box) return;
+  inp.addEventListener('input', onSupplierNameInput);
+  inp.addEventListener('focus', () => { if (supplierPickerEnabled() && !inp.readOnly) renderSupplierSuggestions(); });
+  inp.addEventListener('keydown', onSupplierNameKey);
+  // mousedown (not click) so it fires before the input loses focus
+  box.addEventListener('mousedown', e => {
+    const it = e.target.closest('.sup-item');
+    if (it) { e.preventDefault(); pickSupplierSuggestion(parseInt(it.getAttribute('data-i'))); }
+  });
+  document.addEventListener('mousedown', e => { if (e.target !== inp && !box.contains(e.target)) hideSupplierSuggestions(); });
+})();
 document.getElementById('supNameSelect').onchange = onSupplierNameDropdownChange;
 document.getElementById('supTruckType').onchange = () => { enforceTruckLineLimit(document.getElementById('supTruckType'), true); checkCapacity(); };
 document.getElementById('supTruckCount').oninput = () => { enforceTruckLineLimit(document.getElementById('supTruckCount'), true); checkCapacity(); };
